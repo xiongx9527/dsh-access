@@ -76,8 +76,14 @@ export class RemoteAccessService {
     if (!url) return null;
     const cached = this.qrCache.get(url);
     if (cached) return cached;
-    const encoded = await this.qrEncoder(url);
-    this.qrCache.set(url, encoded);
+    const encoded = await Promise.race([
+      this.qrEncoder(url),
+      new Promise<string | null>((resolve) => {
+        const timer = setTimeout(() => resolve(null), 1500);
+        timer.unref();
+      }),
+    ]);
+    if (encoded !== null) this.qrCache.set(url, encoded);
     return encoded;
   }
 
