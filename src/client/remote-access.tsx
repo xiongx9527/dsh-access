@@ -97,7 +97,9 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
       ),
       isLanAccessAvailable(status) && status?.lanUrl
         ? h('div', { className: 'dshpw-remote-lan' },
-            status.lanQr ? h('img', { className: 'dshpw-remote-qr', src: status.lanQr, alt: t('remoteLanQr') }) : null,
+            status.lanQr
+              ? h('img', { className: 'dshpw-remote-qr', src: status.lanQr, alt: t('remoteLanQr') })
+              : h('div', { className: 'dshpw-remote-qr-placeholder', role: 'status' }, t('remoteQrPreparing')),
             h('div', { className: 'dshpw-remote-copy' },
               h('p', null, t('remoteLanLoginHint')),
               h('div', { className: 'dshpw-remote-url' },
