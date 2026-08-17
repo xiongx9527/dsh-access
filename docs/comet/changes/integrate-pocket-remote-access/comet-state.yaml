@@ -3,7 +3,7 @@ name: integrate-pocket-remote-access
 language: zh-CN
 phase: archive
 status: active
-state_version: 16
+state_version: 17
 brief: brief.md
 spec_changes:
   - capability: remote-access
