@@ -67,6 +67,7 @@ export const zh = {
   // 修改密码
   chgPw: '修改密码',
   targetUser: '目标用户',
+  currentPwPh: '当前密码（主用户重置他人密码时可留空）',
   newPwPh: '新密码（至少 12 位，含大小写、数字、符号）',
   confirmPwPh: '再次输入新密码',
   savePw: '保存密码',
@@ -243,6 +244,7 @@ export const en: Record<keyof typeof zh, string> = {
   'err.INVALID_GATEWAY_PORT': 'Invalid gateway port',
   chgPw: 'Change password',
   targetUser: 'Target user',
+  currentPwPh: 'Current password (leave empty when the owner resets another user)',
   newPwPh: 'New password (12+ chars with uppercase, lowercase, digits and symbols)',
   confirmPwPh: 'Confirm new password',
   savePw: 'Save password',

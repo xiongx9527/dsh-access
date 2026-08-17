@@ -181,6 +181,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
 
   // 改密表单
   const [pwTarget, setPwTarget] = useState('');
+  const [pwCurrent, setPwCurrent] = useState('');
   const [pwNew, setPwNew] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
   // 改名表单
@@ -303,7 +304,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
     if (pwNew !== pwConfirm) return setError(t('pwMismatch'));
     if (!PASSWORD_RE.test(pwNew)) return setError(t('pwPolicy'));
     void run(
-      () => api('/api/dsh-passwords/password', { target: pwTarget || me, password: pwNew }),
+      () => api('/api/dsh-passwords/password', { target: pwTarget || me, currentPassword: pwCurrent, password: pwNew }),
       t('pwChanged'),
     );
   };
@@ -491,6 +492,14 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
       h('span', { className: 'dshpw-label' }, t('chgPw')),
       isAdmin && h('span', { className: 'dshpw-hint' }, t('targetUser')),
       targetSelect(pwTarget, setPwTarget),
+      h('input', {
+        className: 'dshpw-input',
+        type: 'password',
+        autoComplete: 'current-password',
+        placeholder: t('currentPwPh'),
+        value: pwCurrent,
+        onChange: (e: { target: { value: string } }) => setPwCurrent(e.target.value),
+      }),
       h('input', {
         className: 'dshpw-input',
         type: 'password',

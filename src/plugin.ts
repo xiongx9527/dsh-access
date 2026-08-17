@@ -794,7 +794,8 @@ export function apply(ctx: Context): void {
           const body = await readJsonBody(req);
           const target = typeof body.target === 'string' && body.target !== '' ? body.target : caller.username;
           const password = typeof body.password === 'string' ? body.password : '';
-          await auth!.changePassword(caller, target, password, metaOf(req));
+          const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : undefined;
+          await auth!.changePassword(caller, target, password, metaOf(req), currentPassword);
           writeJson(res, 200, { ok: true });
         } catch (error) {
           failJson(res, error);

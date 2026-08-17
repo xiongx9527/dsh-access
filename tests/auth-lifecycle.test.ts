@@ -69,6 +69,8 @@ test('changing a password invalidates the old token immediately', async () => {
     { userId: guest.id, username: guest.username, role: 'user' },
     'guest',
     'ChangedPass@2026',
+    {},
+    USER_PASSWORD,
   );
 
   assert.throws(
