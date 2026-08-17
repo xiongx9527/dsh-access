@@ -180,5 +180,5 @@ test('legacy settings card exposes an admin-only configurable gateway port', () 
   assert.match(cardSource, /t\('saveGatewayPort'\)/);
   assert.match(pluginSource, /path: '\/api\/dsh-passwords\/gateway\/config'/);
   assert.match(pluginSource, /caller\.role !== 'admin'/);
-  assert.match(pluginSource, /gatewayRuntime\.restart\(port\)/);
+  assert.match(pluginSource, /restartGatewayAndRefreshRemote\(gatewayRuntime, remoteAccess, port\)/);
 });

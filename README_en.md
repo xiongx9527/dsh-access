@@ -161,10 +161,21 @@ After logging in to dsh, open **Settings → Plugins** to find the "dsh-password
 | **Change username** | Yourself; the owner can change anyone's | Sign in with the new username afterwards |
 | **Subuser management** | Owner only | Create/delete subusers (subusers can sign in but have no admin rights) |
 | **Subuser permissions** | Owner only | Workspace allowlist, hourly token limit, daily time limit, sandbox level, upload/git-download toggles, ban |
+| **Remote access** | Owner configures it | LAN QR code, login URL and Cloudflare quick tunnel; all traffic enters through the Passwords login gateway |
 | **Chat / messages** | All signed-in users | Chat button in the bottom-left corner, with tags (issue/pull request/discussion/announcement/question) |
 
 - **Owner** = the account created at first-time setup; everything added later is a **subuser**.
 - Passwords follow the same rule as the login page: at least 12 characters with uppercase, lowercase, digits and symbols.
+
+### Unified remote access
+
+The expanded card has two tabs: **Accounts & permissions** and **Remote access**. The gateway port is shared configuration. After a new port is saved and the gateway is confirmed running, the card switches to Remote access and refreshes the LAN URL and QR code.
+
+- LAN URLs use `http://<computer-LAN-IP>:<gateway-port>` and always open the Passwords sign-in flow first.
+- A Cloudflare quick tunnel targets the same Passwords gateway and still requires an account login.
+- Port 3080 remains the loopback-only upstream; this plugin does not listen on Pocket's port 3081.
+- If `dsh-pocket` is already installed, disable or remove it to avoid duplicate entry points and port conflicts. This plugin never uninstalls another plugin automatically.
+- Plain HTTP is suitable only for a trusted LAN; prefer HTTPS for public access.
 
 ## Configuration reference (.env)
 
