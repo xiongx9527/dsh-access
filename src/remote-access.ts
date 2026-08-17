@@ -86,10 +86,31 @@ export class RemoteAccessService {
     return encoded;
   }
 
+  statusSnapshot(gatewayRunning: boolean): RemoteAccessStatus {
+    const lanIp = selectLanIPv4(this.networkInterfacesFn());
+    const lanUrl = lanIp ? `http://${lanIp}:${String(this.gatewayPort)}` : null;
+    const tunnel = this.tunnel.snapshot();
+    return {
+      gatewayPort: this.gatewayPort,
+      gatewayRunning,
+      lanIp,
+      lanUrl,
+      lanQr: lanUrl ? this.qrCache.get(lanUrl) ?? null : null,
+      tunnel: { ...tunnel, qr: tunnel.url ? this.qrCache.get(tunnel.url) ?? null : null },
+    };
+  }
+
+  async prefetchQr(gatewayRunning: boolean): Promise<void> {
+    const snapshot = this.statusSnapshot(gatewayRunning);
+    await this.qr(snapshot.lanUrl);
+    await this.qr(snapshot.tunnel.url);
+  }
+
   async status(gatewayRunning: boolean): Promise<RemoteAccessStatus> {
     const lanIp = selectLanIPv4(this.networkInterfacesFn());
     const lanUrl = lanIp ? `http://${lanIp}:${String(this.gatewayPort)}` : null;
     const tunnel = this.tunnel.snapshot();
+    console.error('[dsh-passwords] remote service status qr done');
     return {
       gatewayPort: this.gatewayPort,
       gatewayRunning,

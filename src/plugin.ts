@@ -540,7 +540,7 @@ export function apply(ctx: Context): void {
             console.error('[dsh-passwords] 临时隧道启动失败:', error);
           });
           await new Promise((resolve) => setTimeout(resolve, 0));
-          writeJson(res, 202, { ok: true, ...(await remoteAccess.status(true)) });
+          writeJson(res, 202, { ok: true, ...remoteAccess.statusSnapshot(true) });
         } catch (error) {
           failJson(res, error);
         }
@@ -564,7 +564,7 @@ export function apply(ctx: Context): void {
             console.error('[dsh-passwords] 临时隧道停止失败:', error);
           });
           await new Promise((resolve) => setTimeout(resolve, 0));
-          writeJson(res, 202, { ok: true, ...(await remoteAccess.status(await gatewayAlreadyRunning(gatewayRuntime?.port ?? cfg.gateway.port))) });
+          writeJson(res, 202, { ok: true, ...remoteAccess.statusSnapshot(true) });
         } catch (error) {
           failJson(res, error);
         }

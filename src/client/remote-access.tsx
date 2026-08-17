@@ -48,7 +48,7 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
 
   useEffect(() => { void refresh(); }, [props.refreshKey]);
   useEffect(() => {
-    if (!status || !shouldPollTunnel(status.tunnel.phase)) return;
+    if (!status || (!shouldPollTunnel(status.tunnel.phase) && !(status.lanUrl && !status.lanQr))) return;
     const timer = window.setInterval(() => { void refresh(); }, 1000);
     return () => window.clearInterval(timer);
   }, [status?.tunnel.phase]);
