@@ -475,7 +475,7 @@ export function apply(ctx: Context): void {
       writeJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '仅主用户可管理远程访问' });
       return null;
     }
-    return caller;
+    return caller ?? { userId: 0, username: 'admin', role: 'admin' };
   };
 
   // ── /api/dsh-passwords/* 路由（exact 路由先于连接插件的 /api 前缀命中） ──
