@@ -11,27 +11,41 @@ export interface RemoteAccessStatus {
   tunnel: TunnelSnapshot & { qr: string | null };
 }
 
-const PRIVATE_IPV4_RE = /^(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/;
-const PHYSICAL_IFACE_RE = /^(?:wlan|wi-?fi|wireless|ethernet|eth\d|en\d|wlp\d|以太网|本地连接)/i;
-const VPN_IFACE_RE = /(?:radmin|tailscale|zerotier|utun|tun|tap|vpn|vethernet|virtual|vmware|virtualbox|wsl|docker|teredo|hamachi|bluetooth|bridge|awdl|llw)/i;
+function privateAddressWeight(ip: string): number {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return 0;
+  if (parts[0] === 10) return 3;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return 3;
+  if (parts[0] === 192 && parts[1] === 168) return 3;
+  return 0;
+}
+
+function interfaceKindWeight(name: string): number {
+  const normalized = name.toLowerCase();
+  const virtualMarkers = ['utun', 'tun', 'tap', 'vpn', 'tailscale', 'zerotier', 'docker', 'bridge', 'awdl', 'llw', 'vmware', 'virtualbox'];
+  if (virtualMarkers.some((marker) => normalized.includes(marker))) return -4;
+  const physicalPrefixes = ['en', 'eth', 'wlan', 'wlp', 'wifi', 'wi-fi', 'ethernet'];
+  return physicalPrefixes.some((prefix) => normalized.startsWith(prefix)) ? 2 : 0;
+}
 
 type InterfaceMap = NodeJS.Dict<NetworkInterfaceInfo[]>;
 
 export function selectLanIPv4(interfaces: InterfaceMap): string | null {
-  const candidates: Array<{ ip: string; score: number; order: number }> = [];
-  for (const [name, addresses] of Object.entries(interfaces ?? {})) {
-    for (const address of addresses ?? []) {
-      if (address.family !== 'IPv4' || address.internal) continue;
-      const ip = address.address;
-      if (!ip || ip.startsWith('127.') || ip.startsWith('169.254.')) continue;
-      let score = PRIVATE_IPV4_RE.test(ip) ? 100 : 0;
-      if (PHYSICAL_IFACE_RE.test(name)) score += 20;
-      if (VPN_IFACE_RE.test(name)) score -= 50;
-      candidates.push({ ip, score, order: candidates.length });
+  let best: { address: string; rank: number; index: number } | null = null;
+  let index = 0;
+  for (const name of Object.keys(interfaces ?? {})) {
+    for (const entry of interfaces[name] ?? []) {
+      const currentIndex = index++;
+      if (entry.family !== 'IPv4' || entry.internal) continue;
+      const firstTwo = entry.address.split('.').slice(0, 2).join('.');
+      if (entry.address.startsWith('127.') || firstTwo === '169.254') continue;
+      const rank = privateAddressWeight(entry.address) * 10 + interfaceKindWeight(name);
+      if (best === null || rank > best.rank || (rank === best.rank && currentIndex < best.index)) {
+        best = { address: entry.address, rank, index: currentIndex };
+      }
     }
   }
-  candidates.sort((a, b) => b.score - a.score || a.order - b.order);
-  return candidates[0]?.ip ?? null;
+  return best?.address ?? null;
 }
 
 export interface RemoteAccessServiceOptions {

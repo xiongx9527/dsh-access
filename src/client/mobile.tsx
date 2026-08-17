@@ -3,9 +3,8 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 
 const MOBILE_QUERY = '(max-width: 640px)';
 
-function setOpen(open: boolean): void {
-  if (typeof document === 'undefined') return;
-  document.documentElement.toggleAttribute('data-dshpw-mobile-nav-open', open);
+export function setMobileNavigationOpen(open: boolean, root: Pick<HTMLElement, 'toggleAttribute'> | null = typeof document === 'undefined' ? null : document.documentElement): void {
+  root?.toggleAttribute('data-dshpw-mobile-nav-open', open);
 }
 
 export function MobileNavigation(props: PropsLocale<'dshpw'>) {
@@ -17,7 +16,7 @@ export function MobileNavigation(props: PropsLocale<'dshpw'>) {
     const update = () => {
       setMobile(query.matches);
       if (!query.matches) {
-        setOpen(false);
+        setMobileNavigationOpen(false);
         setOpenState(false);
       }
     };
@@ -25,7 +24,7 @@ export function MobileNavigation(props: PropsLocale<'dshpw'>) {
     query.addEventListener?.('change', update);
     return () => {
       query.removeEventListener?.('change', update);
-      setOpen(false);
+      setMobileNavigationOpen(false);
     };
   }, []);
 
@@ -33,9 +32,9 @@ export function MobileNavigation(props: PropsLocale<'dshpw'>) {
   const toggle = () => {
     const next = !open;
     setOpenState(next);
-    setOpen(next);
+    setMobileNavigationOpen(next);
   };
-  const close = () => { setOpenState(false); setOpen(false); };
+  const close = () => { setOpenState(false); setMobileNavigationOpen(false); };
   return h(
     'div',
     { className: 'dshpw-mobile-nav' },

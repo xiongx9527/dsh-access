@@ -248,7 +248,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
   const isAdmin = identity.kind === 'admin';
   const me = identity.kind === 'admin' || identity.kind === 'user' ? identity.username : '';
 
-  const run = async (fn: () => Promise<void>, okMessage: string) => {
+  const run = async (fn: () => Promise<void>, okMessage: string, onError?: () => void) => {
     setBusy(true);
     setError('');
     setNotice('');
@@ -258,6 +258,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
       refresh();
     } catch (e) {
       setError(errText(e, t));
+      onError?.();
     } finally {
       setBusy(false);
     }
@@ -286,7 +287,10 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
       setGatewayPortDraft(String(updated.port));
       setActiveTab('remote');
       setRemoteRefreshKey((value) => value + 1);
-    }, t('gatewayPortSaved', { port }));
+    }, t('gatewayPortSaved', { port }), () => {
+      setActiveTab('remote');
+      setRemoteRefreshKey((value) => value + 1);
+    });
   };
 
   const changePassword = () => {

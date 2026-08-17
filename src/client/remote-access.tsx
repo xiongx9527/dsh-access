@@ -16,6 +16,14 @@ export interface RemoteAccessStatus {
   };
 }
 
+export function shouldPollTunnel(phase: RemoteAccessStatus['tunnel']['phase']): boolean {
+  return phase !== 'idle';
+}
+
+export function isLanAccessAvailable(status: RemoteAccessStatus | null): boolean {
+  return status?.gatewayRunning === true && status.lanUrl !== null;
+}
+
 async function remoteApi(path: string, method = 'GET'): Promise<RemoteAccessStatus> {
   const response = await fetch(path, {
     method,
@@ -36,11 +44,11 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
 
   const refresh = () => remoteApi('/api/dsh-passwords/remote-access/status')
     .then((next) => { setStatus(next); setError(''); })
-    .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
+    .catch((reason) => { setStatus(null); setError(reason instanceof Error ? reason.message : String(reason)); });
 
   useEffect(() => { void refresh(); }, [props.refreshKey]);
   useEffect(() => {
-    if (!status || !['downloading', 'starting', 'stopping'].includes(status.tunnel.phase)) return;
+    if (!status || !shouldPollTunnel(status.tunnel.phase)) return;
     const timer = window.setInterval(() => { void refresh(); }, 1000);
     return () => window.clearInterval(timer);
   }, [status?.tunnel.phase]);
@@ -85,9 +93,9 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
       { className: 'dshpw-remote-card' },
       h('div', { className: 'dshpw-remote-card-head' },
         h('div', null, h('h3', null, t('remoteLanTitle')), h('p', null, t('remoteLanHint'))),
-        h('span', { className: `dshpw-remote-badge${status?.lanUrl ? ' ready' : ''}` }, status?.lanUrl ? t('remoteAvailable') : t('remoteUnavailable')),
+        h('span', { className: `dshpw-remote-badge${isLanAccessAvailable(status) ? ' ready' : ''}` }, isLanAccessAvailable(status) ? t('remoteAvailable') : t('remoteUnavailable')),
       ),
-      status?.lanUrl
+      isLanAccessAvailable(status) && status?.lanUrl
         ? h('div', { className: 'dshpw-remote-lan' },
             status.lanQr ? h('img', { className: 'dshpw-remote-qr', src: status.lanQr, alt: t('remoteLanQr') }) : null,
             h('div', { className: 'dshpw-remote-copy' },

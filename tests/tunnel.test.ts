@@ -74,3 +74,28 @@ test('stopping during cloudflared preparation cancels the pending launch', async
   assert.equal(spawns, 0);
   assert.equal(tunnel.snapshot().phase, 'idle');
 });
+
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ensureCloudflared } from '../src/tunnel.js';
+
+test('ensureCloudflared copies a PATH binary into the Passwords data directory', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dshpw-cloudflared-'));
+  const pathDir = join(root, 'path');
+  const home = join(root, 'home');
+  mkdirSync(pathDir, { recursive: true });
+  const name = process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared';
+  const source = join(pathDir, name);
+  writeFileSync(source, 'fake-cloudflared');
+  if (process.platform !== 'win32') chmodSync(source, 0o700);
+  const previous = process.env.PATH;
+  process.env.PATH = pathDir;
+  try {
+    const resolved = await ensureCloudflared(home);
+    assert.equal(resolved, join(home, 'remote-access', 'bin', name));
+    assert.equal(readFileSync(resolved, 'utf8'), 'fake-cloudflared');
+  } finally {
+    process.env.PATH = previous;
+  }
+});

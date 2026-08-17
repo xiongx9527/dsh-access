@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 
 export type TunnelPhase = 'idle' | 'downloading' | 'starting' | 'running' | 'stopping' | 'error';
@@ -62,13 +62,17 @@ async function extractTarGz(archive: string, destination: string): Promise<void>
 }
 
 export async function ensureCloudflared(home: string): Promise<string> {
-  const fromPath = executableOnPath();
-  if (fromPath) return fromPath;
-
   const directory = join(home, 'remote-access', 'bin');
   const executable = join(directory, executableName());
   if (existsSync(executable)) return executable;
   mkdirSync(directory, { recursive: true, mode: 0o700 });
+
+  const fromPath = executableOnPath();
+  if (fromPath) {
+    copyFileSync(fromPath, executable);
+    if (process.platform !== 'win32') chmodSync(executable, 0o700);
+    return executable;
+  }
 
   const asset = releaseAsset();
   const response = await fetch(`https://github.com/cloudflare/cloudflared/releases/latest/download/${asset.name}`, {
@@ -124,13 +128,13 @@ export class CloudflaredTunnel implements TunnelController {
     if (this.state.phase === 'running') return Promise.resolve(this.snapshot());
     if (this.startPromise) return this.startPromise;
     const generation = ++this.generation;
+    this.state = { phase: 'downloading', detail: 'cloudflared', url: null, startedAt: null };
     this.startPromise = this.startOnce(targetUrl, generation).finally(() => { this.startPromise = null; });
     return this.startPromise;
   }
 
   private async startOnce(targetUrl: string, generation: number): Promise<TunnelSnapshot> {
     await this.terminateChild();
-    this.state = { phase: 'downloading', detail: 'cloudflared', url: null, startedAt: null };
     try {
       const executable = await this.ensureExecutable(this.home);
       if (generation !== this.generation) throw new Error('cloudflared start cancelled');

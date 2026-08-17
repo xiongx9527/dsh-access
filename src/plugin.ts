@@ -31,6 +31,12 @@ import {
   resolvePluginCaller,
 } from './local-access.js';
 
+
+export function remoteAccessAuthorization(caller: AuthedUser | null): 'allowed' | 'unauthenticated' | 'forbidden' {
+  if (caller === null) return 'unauthenticated';
+  return caller.role === 'admin' ? 'allowed' : 'forbidden';
+}
+
 /** 稳定 cordis 插件名（insert 进 cordis.yml 时用同一个名字） */
 export const name = 'dsh-passwords';
 
@@ -434,9 +440,17 @@ export function apply(ctx: Context): void {
   }
 
   const requireAdmin = (req: IncomingMessage, res: ServerResponse): AuthedUser | null => {
-    const caller = guard(req, res);
-    if (!caller) return null;
-    if (caller.role !== 'admin') {
+    if (req.headers['sec-fetch-site'] === 'cross-site') {
+      writeJson(res, 403, { ok: false, code: 'FORBIDDEN_CSRF', error: 'forbidden' });
+      return null;
+    }
+    const caller = callerOf(req);
+    const authorization = remoteAccessAuthorization(caller);
+    if (authorization === 'unauthenticated') {
+      writeJson(res, 401, { ok: false, code: 'NOT_AUTHENTICATED', error: '未登录或会话已失效' });
+      return null;
+    }
+    if (authorization === 'forbidden') {
       writeJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '仅主用户可管理远程访问' });
       return null;
     }
@@ -501,7 +515,11 @@ export function apply(ctx: Context): void {
             return;
           }
           await remoteAccess.setGatewayPort(port);
-          writeJson(res, 200, { ok: true, ...(await remoteAccess.startTunnel()) });
+          void remoteAccess.startTunnel().catch((error) => {
+            console.error('[dsh-passwords] 临时隧道启动失败:', error);
+          });
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          writeJson(res, 202, { ok: true, ...(await remoteAccess.status(true)) });
         } catch (error) {
           failJson(res, error);
         }
@@ -521,7 +539,11 @@ export function apply(ctx: Context): void {
           return;
         }
         try {
-          writeJson(res, 200, { ok: true, ...(await remoteAccess.stopTunnel()) });
+          void remoteAccess.stopTunnel().catch((error) => {
+            console.error('[dsh-passwords] 临时隧道停止失败:', error);
+          });
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          writeJson(res, 202, { ok: true, ...(await remoteAccess.status(await gatewayAlreadyRunning(gatewayRuntime?.port ?? cfg.gateway.port))) });
         } catch (error) {
           failJson(res, error);
         }
