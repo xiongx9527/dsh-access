@@ -9,6 +9,7 @@
 // `locale: 'dshpw'` 声明注入。
 import { createElement as h, useEffect, useState } from 'react';
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
+import { RemoteAccessPanel } from './remote-access';
 
 export interface UserInfo {
   id: number;
@@ -171,6 +172,8 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<'account' | 'remote'>('account');
+  const [remoteRefreshKey, setRemoteRefreshKey] = useState(0);
 
   // 改密表单
   const [pwTarget, setPwTarget] = useState('');
@@ -281,6 +284,8 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
       const updated = await api<GatewayConfig>('/api/dsh-passwords/gateway/config', { port: gatewayPortDraft });
       setGatewayConfig(updated);
       setGatewayPortDraft(String(updated.port));
+      setActiveTab('remote');
+      setRemoteRefreshKey((value) => value + 1);
     }, t('gatewayPortSaved', { port }));
   };
 
@@ -449,8 +454,28 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
         ),
     ),
 
-    // ── 修改密码 ──
     h(
+      'div',
+      { className: 'dshpw-tabs', role: 'tablist', 'aria-label': t('settingsTabs') },
+      h('button', {
+        className: `dshpw-tab${activeTab === 'account' ? ' active' : ''}`,
+        role: 'tab',
+        'aria-selected': activeTab === 'account',
+        onClick: () => setActiveTab('account'),
+      }, t('accountTab')),
+      isAdmin && h('button', {
+        className: `dshpw-tab${activeTab === 'remote' ? ' active' : ''}`,
+        role: 'tab',
+        'aria-selected': activeTab === 'remote',
+        onClick: () => setActiveTab('remote'),
+      }, t('remoteTab')),
+    ),
+
+    activeTab === 'account' && h(
+      'div',
+      { className: 'dshpw-tab-panel', role: 'tabpanel' },
+      // ── 修改密码 ──
+      h(
       'div',
       { className: 'dshpw-section' },
       h('span', { className: 'dshpw-label' }, t('chgPw')),
@@ -666,6 +691,9 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
         ),
         h('div', { className: 'dshpw-hint' }, t('subHint')),
       ),
+    ),
+
+    activeTab === 'remote' && isAdmin && h(RemoteAccessPanel, { t, refreshKey: remoteRefreshKey }),
 
     error && h('div', { className: 'dshpw-error' }, error),
     notice && h('div', { className: 'dshpw-ok' }, notice),

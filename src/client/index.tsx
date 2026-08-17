@@ -10,6 +10,7 @@ import { DshPasswordsCard } from './card';
 import { ChatLauncher } from './chat';
 import { TokenReporter } from './token';
 import { AccountMenu } from './account';
+import { MobileNavigation } from './mobile';
 import { zh, en } from './locales';
 
 /** 卡片样式：全部使用 dsh 设计令牌（--dsw-alias-*），颜色/主题与官方 PluginCard 完全一致 */
@@ -103,7 +104,38 @@ const CSS = `
 .dshpw-directory-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshpw-directory-list{min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
 .dshpw-directory-list button{padding:10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:640px){.dshpw-admin-grid{grid-template-columns:1fr}.dshpw-directory-picker{inset:16px}.dshpw-admin-overlay{padding:10px}}
+.dshpw-tabs{display:flex;gap:22px;margin-top:6px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dshpw-tab{appearance:none;border:0;border-bottom:2px solid transparent;padding:9px 1px 11px;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-weight:500;cursor:pointer}
+.dshpw-tab.active{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7)}
+.dshpw-tab-panel{display:flex;flex-direction:column;gap:14px}
+.dshpw-remote-panel{display:flex;flex-direction:column;gap:14px;padding-top:2px}
+.dshpw-remote-status{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
+.dshpw-remote-status.ready{background:color-mix(in srgb,var(--dsw-alias-label-success,#22c55e) 12%,transparent);color:var(--dsw-alias-label-primary)}
+.dshpw-remote-dot{width:9px;height:9px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}
+.dshpw-remote-status.ready .dshpw-remote-dot{background:var(--dsw-alias-label-success,#22c55e)}
+.dshpw-remote-card{padding:15px;border:1px solid var(--dsw-alias-border-l2);border-radius:13px;background:var(--dsw-alias-bg-layer-2)}
+.dshpw-remote-card-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.dshpw-remote-card-head h3{margin:0;font-size:14px}.dshpw-remote-card-head p{margin:3px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px}
+.dshpw-remote-badge{padding:4px 9px;border-radius:999px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-tertiary)}
+.dshpw-remote-badge.ready{background:color-mix(in srgb,var(--dsw-alias-label-success,#22c55e) 12%,transparent);color:var(--dsw-alias-label-success,#22c55e)}
+.dshpw-remote-lan,.dshpw-remote-public{display:grid;grid-template-columns:156px minmax(0,1fr);gap:18px;align-items:center;margin-top:15px}
+.dshpw-remote-qr{width:156px;height:156px;padding:8px;border:1px solid var(--dsw-alias-border-l2);border-radius:11px;background:#fff}.dshpw-remote-qr.small{width:112px;height:112px}
+.dshpw-remote-copy{min-width:0}.dshpw-remote-copy>p{margin:0 0 8px}.dshpw-remote-url{display:flex;align-items:center;gap:8px;margin:8px 0}
+.dshpw-remote-url code{min-width:0;flex:1;padding:9px 10px;border-radius:8px;background:var(--dsw-alias-bg-layer-3);overflow-wrap:anywhere;color:var(--dsw-alias-label-primary)}
+.dshpw-btn.ghost{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2)}
+.dshpw-remote-switch{appearance:none;width:43px;height:25px;padding:3px;border:0;border-radius:999px;background:var(--dsw-alias-bg-layer-3);cursor:pointer}.dshpw-remote-switch span{display:block;width:19px;height:19px;border-radius:50%;background:var(--dsw-alias-bg-layer-1);transition:transform .18s}.dshpw-remote-switch.on{background:var(--dsw-alias-brand-primary,#4f6ef7)}.dshpw-remote-switch.on span{transform:translateX(18px)}.dshpw-remote-switch:disabled{opacity:.5;cursor:default}
+.dshpw-remote-empty{padding-top:12px}
+@media(max-width:640px){.dshpw-admin-grid{grid-template-columns:1fr}.dshpw-directory-picker{inset:16px}.dshpw-admin-overlay{padding:10px}.dshpw-remote-lan,.dshpw-remote-public{grid-template-columns:1fr}.dshpw-remote-qr{margin:0 auto}.dshpw-remote-url{align-items:stretch;flex-direction:column}.dshpw-remote-card-head{align-items:flex-start}.dshpw-tabs{gap:16px}}
+@media(max-width:640px){
+  html,body,#root{max-width:100%;overflow-x:hidden}
+  [class*="_sidebar"]{position:fixed!important;z-index:2050!important;top:0!important;bottom:0!important;left:0!important;max-width:min(86vw,320px)!important;transform:translateX(-105%);transition:transform .2s ease;background:var(--dsw-alias-bg-layer-1)!important;box-shadow:0 18px 48px rgba(0,0,0,.28)}
+  html[data-dshpw-mobile-nav-open] [class*="_sidebar"]{transform:translateX(0)}
+  [class*="_main"],[class*="_content"],[class*="_conversation"]{min-width:0!important;max-width:100%!important}
+  [class*="_composer"]{max-width:100%!important}
+  .dshpw-mobile-toggle{position:fixed;z-index:2070;left:max(12px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));width:42px;height:42px;border:1px solid var(--dsw-alias-border-l2);border-radius:50%;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:0 8px 24px rgba(0,0,0,.2);font-size:20px;cursor:pointer}
+  .dshpw-mobile-backdrop{position:fixed;z-index:2040;inset:0;border:0;background:rgba(0,0,0,.38)}
+}
+
 `;
 
 if (typeof document !== 'undefined') {
@@ -168,6 +200,13 @@ export function apply(ctx: ClientContext): void {
       for (const dispose of disposers) dispose();
     };
   }, 'dsh-passwords: gateway account and role chrome');
+
+  ctx.slots.inject('shell.overlay', () =>
+    ctx.slots.register(
+      { name: 'shell.overlay', id: 'dsh-passwords-mobile-nav', order: 95, locale: 'dshpw', inject: () => ({}) },
+      MobileNavigation,
+    ),
+  );
 
   // 全局聊天入口：左下角圆形按钮 + 居中弹窗（shell.overlay 槽，root 作用域）
   ctx.slots.inject('shell.overlay', () =>

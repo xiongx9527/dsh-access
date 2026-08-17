@@ -24,6 +24,7 @@ import { AuthService, AuthError, assertNoSqlInjection, type AuthedUser, type Req
 import { findDshRoot, patchStatus } from './patch.js';
 import { assignWorkspace } from './workspace-assignment.js';
 import { parseGatewayPort, writeEnvFileAtomic, writeGatewayPort } from './gateway-settings.js';
+import { RemoteAccessService } from './remote-access.js';
 import {
   GATEWAY_PROXY_HEADER,
   isDirectLocalPluginRequest,
@@ -425,6 +426,22 @@ export function apply(ctx: Context): void {
   };
 
   const gatewayRuntime = configured ? startGateway(ctx, cfg) : null;
+  const remoteAccess = configured
+    ? new RemoteAccessService({ gatewayPort: gatewayRuntime?.port ?? cfg.gateway.port, home: path.dirname(cfg.dbPath) })
+    : null;
+  if (remoteAccess !== null) {
+    ctx.effect(() => () => { void remoteAccess.close(); }, 'dsh-passwords: remote access cleanup');
+  }
+
+  const requireAdmin = (req: IncomingMessage, res: ServerResponse): AuthedUser | null => {
+    const caller = guard(req, res);
+    if (!caller) return null;
+    if (caller.role !== 'admin') {
+      writeJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '仅主用户可管理远程访问' });
+      return null;
+    }
+    return caller;
+  };
 
   // ── /api/dsh-passwords/* 路由（exact 路由先于连接插件的 /api 前缀命中） ──
   const routes: WebRoute[] = [
@@ -440,6 +457,74 @@ export function apply(ctx: Context): void {
           me: { username: caller.username, role: caller.role },
           users,
         });
+      },
+    },
+    {
+      kind: 'exact',
+      path: '/api/dsh-passwords/remote-access/status',
+      handler: async (req, res) => {
+        if (!requireAdmin(req, res)) return;
+        if (req.method !== 'GET') {
+          writeJson(res, 405, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'method not allowed' });
+          return;
+        }
+        if (remoteAccess === null) {
+          writeJson(res, 503, { ok: false, code: 'NOT_CONFIGURED', error: '远程访问尚未配置' });
+          return;
+        }
+        try {
+          const port = gatewayRuntime?.port ?? cfg.gateway.port;
+          await remoteAccess.setGatewayPort(port);
+          writeJson(res, 200, { ok: true, ...(await remoteAccess.status(await gatewayAlreadyRunning(port))) });
+        } catch (error) {
+          failJson(res, error);
+        }
+      },
+    },
+    {
+      kind: 'exact',
+      path: '/api/dsh-passwords/remote-access/tunnel/start',
+      handler: async (req, res) => {
+        if (!requireAdmin(req, res)) return;
+        if (req.method !== 'POST') {
+          writeJson(res, 405, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'method not allowed' });
+          return;
+        }
+        if (remoteAccess === null) {
+          writeJson(res, 503, { ok: false, code: 'NOT_CONFIGURED', error: '远程访问尚未配置' });
+          return;
+        }
+        try {
+          const port = gatewayRuntime?.port ?? cfg.gateway.port;
+          if (!(await gatewayAlreadyRunning(port))) {
+            writeJson(res, 503, { ok: false, code: 'GATEWAY_NOT_RUNNING', error: '登录网关未运行' });
+            return;
+          }
+          await remoteAccess.setGatewayPort(port);
+          writeJson(res, 200, { ok: true, ...(await remoteAccess.startTunnel()) });
+        } catch (error) {
+          failJson(res, error);
+        }
+      },
+    },
+    {
+      kind: 'exact',
+      path: '/api/dsh-passwords/remote-access/tunnel/stop',
+      handler: async (req, res) => {
+        if (!requireAdmin(req, res)) return;
+        if (req.method !== 'POST') {
+          writeJson(res, 405, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'method not allowed' });
+          return;
+        }
+        if (remoteAccess === null) {
+          writeJson(res, 503, { ok: false, code: 'NOT_CONFIGURED', error: '远程访问尚未配置' });
+          return;
+        }
+        try {
+          writeJson(res, 200, { ok: true, ...(await remoteAccess.stopTunnel()) });
+        } catch (error) {
+          failJson(res, error);
+        }
       },
     },
     {
@@ -501,12 +586,14 @@ export function apply(ctx: Context): void {
             writeJson(res, 409, { ok: false, code: 'PORT_IN_USE', error: `端口 ${String(port)} 已被占用` });
             return;
           }
+          if (remoteAccess !== null) await remoteAccess.stopTunnel();
           const previousProcessValue = process.env.MCP_GATEWAY_PORT;
           const previousEnv = writeGatewayPort(gatewayRuntime.envPath, port);
           process.env.MCP_GATEWAY_PORT = String(port);
           try {
             await gatewayRuntime.restart(port);
             cfg.gateway.port = port;
+            if (remoteAccess !== null) await remoteAccess.setGatewayPort(port);
             writeJson(res, 200, { ok: true, port, host: cfg.gateway.host, upstream: cfg.gateway.upstream });
           } catch (error) {
             writeEnvFileAtomic(gatewayRuntime.envPath, previousEnv);
