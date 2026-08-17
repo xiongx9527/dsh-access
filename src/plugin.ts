@@ -47,7 +47,8 @@ export async function restartGatewayAndRefreshRemote(
   if (remote !== null) await remote.setGatewayPort(port);
 }
 
-export function remoteAccessAuthorization(caller: AuthedUser | null): 'allowed' | 'unauthenticated' | 'forbidden' {
+export function remoteAccessAuthorization(caller: AuthedUser | null, directLocal = false): 'allowed' | 'unauthenticated' | 'forbidden' {
+  if (caller === null && directLocal) return 'allowed';
   if (caller === null) return 'unauthenticated';
   return caller.role === 'admin' ? 'allowed' : 'forbidden';
 }
@@ -460,7 +461,12 @@ export function apply(ctx: Context): void {
       return null;
     }
     const caller = callerOf(req);
-    const authorization = remoteAccessAuthorization(caller);
+    const directLocal = isDirectLocalPluginRequest({
+      remoteAddress: req.socket.remoteAddress,
+      host: req.headers.host,
+      gatewayMarker: req.headers[GATEWAY_PROXY_HEADER],
+    });
+    const authorization = remoteAccessAuthorization(caller, directLocal);
     if (authorization === 'unauthenticated') {
       writeJson(res, 401, { ok: false, code: 'NOT_AUTHENTICATED', error: '未登录或会话已失效' });
       return null;

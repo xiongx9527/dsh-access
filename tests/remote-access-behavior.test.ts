@@ -12,6 +12,7 @@ const base: RemoteAccessStatus = {
 
 test('remote management requires an authenticated Admin and does not use local fallback', () => {
   assert.equal(remoteAccessAuthorization(null), 'unauthenticated');
+  assert.equal(remoteAccessAuthorization(null, true), 'allowed');
   assert.equal(remoteAccessAuthorization({ userId: 2, username: 'guest', role: 'user' }), 'forbidden');
   assert.equal(remoteAccessAuthorization({ userId: 1, username: 'admin', role: 'admin' }), 'allowed');
 });
