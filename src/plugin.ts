@@ -32,6 +32,21 @@ import {
 } from './local-access.js';
 
 
+export interface RemoteAccessPortController {
+  stopTunnel(): Promise<unknown>;
+  setGatewayPort(port: number): Promise<void>;
+}
+
+export async function restartGatewayAndRefreshRemote(
+  runtime: Pick<GatewayRuntime, 'restart'>,
+  remote: RemoteAccessPortController | null,
+  port: number,
+): Promise<void> {
+  if (remote !== null) await remote.stopTunnel();
+  await runtime.restart(port);
+  if (remote !== null) await remote.setGatewayPort(port);
+}
+
 export function remoteAccessAuthorization(caller: AuthedUser | null): 'allowed' | 'unauthenticated' | 'forbidden' {
   if (caller === null) return 'unauthenticated';
   return caller.role === 'admin' ? 'allowed' : 'forbidden';
@@ -168,7 +183,7 @@ function gatewayAlreadyRunning(port: number): Promise<boolean> {
  * 无需任何额外启动命令。dsh 退出时（ctx.dispose）子进程随停；
  * 网关侧另有父进程看门狗兜底（宿主被强杀时自己退出）。
  */
-interface GatewayRuntime {
+export interface GatewayRuntime {
   readonly envPath: string;
   readonly port: number;
   restart(port: number): Promise<void>;
@@ -608,14 +623,12 @@ export function apply(ctx: Context): void {
             writeJson(res, 409, { ok: false, code: 'PORT_IN_USE', error: `端口 ${String(port)} 已被占用` });
             return;
           }
-          if (remoteAccess !== null) await remoteAccess.stopTunnel();
           const previousProcessValue = process.env.MCP_GATEWAY_PORT;
           const previousEnv = writeGatewayPort(gatewayRuntime.envPath, port);
           process.env.MCP_GATEWAY_PORT = String(port);
           try {
-            await gatewayRuntime.restart(port);
+            await restartGatewayAndRefreshRemote(gatewayRuntime, remoteAccess, port);
             cfg.gateway.port = port;
-            if (remoteAccess !== null) await remoteAccess.setGatewayPort(port);
             writeJson(res, 200, { ok: true, port, host: cfg.gateway.host, upstream: cfg.gateway.upstream });
           } catch (error) {
             writeEnvFileAtomic(gatewayRuntime.envPath, previousEnv);

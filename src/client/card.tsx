@@ -11,6 +11,10 @@ import { createElement as h, useEffect, useState } from 'react';
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 import { RemoteAccessPanel } from './remote-access';
 
+export function gatewaySaveViewState(refreshKey: number): { activeTab: 'remote'; refreshKey: number } {
+  return { activeTab: 'remote', refreshKey: refreshKey + 1 };
+}
+
 export interface UserInfo {
   id: number;
   username: string;
@@ -285,11 +289,13 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
       const updated = await api<GatewayConfig>('/api/dsh-passwords/gateway/config', { port: gatewayPortDraft });
       setGatewayConfig(updated);
       setGatewayPortDraft(String(updated.port));
-      setActiveTab('remote');
-      setRemoteRefreshKey((value) => value + 1);
+      const view = gatewaySaveViewState(remoteRefreshKey);
+      setActiveTab(view.activeTab);
+      setRemoteRefreshKey(view.refreshKey);
     }, t('gatewayPortSaved', { port }), () => {
-      setActiveTab('remote');
-      setRemoteRefreshKey((value) => value + 1);
+      const view = gatewaySaveViewState(remoteRefreshKey);
+      setActiveTab(view.activeTab);
+      setRemoteRefreshKey(view.refreshKey);
     });
   };
 
