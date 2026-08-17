@@ -23,9 +23,44 @@ export interface StateData {
   users: UserInfo[];
 }
 
+export type CardIdentity =
+  | { kind: 'local' }
+  | { kind: 'loading' }
+  | { kind: 'admin' | 'user'; username: string };
+
+export function gatewayIdentityRouteAvailable(contentType: string | null): boolean {
+  return contentType?.toLowerCase().includes('application/json') ?? false;
+}
+
+export function resolveCardIdentity(
+  data: StateData | null,
+  gatewayRouteAvailable: boolean | null,
+): CardIdentity {
+  if (data?.me?.role === 'admin') return { kind: 'admin', username: data.me.username };
+  if (data?.me?.role === 'user') return { kind: 'user', username: data.me.username };
+  if (gatewayRouteAvailable === false) return { kind: 'local' };
+  return { kind: 'loading' };
+}
+
 export interface PatchState {
   settingsHostMode: boolean;
   whitelist: boolean;
+}
+
+export interface GatewayConfig {
+  port: number;
+  host: string;
+  upstream: string;
+}
+
+export type PatchPresentation = 'unknown' | 'ok' | 'bad';
+
+export function resolvePatchPresentation(
+  _identity: CardIdentity,
+  patchState: PatchState | null,
+): PatchPresentation {
+  if (patchState === null) return 'unknown';
+  return patchState.settingsHostMode && patchState.whitelist ? 'ok' : 'bad';
 }
 
 export interface PermOverview {
@@ -34,6 +69,8 @@ export interface PermOverview {
     id: number;
     username: string;
     role: 'admin' | 'user';
+    remark?: string;
+    workspaceRoot?: string | null;
     permissions: {
       allowedFolders: string[];
       hourlyTokenLimit: number | null;
@@ -128,6 +165,9 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
 
   const [data, setData] = useState<StateData | null>(null);
   const [patchState, setPatchState] = useState<PatchState | null>(null);
+  const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | null>(null);
+  const [gatewayPortDraft, setGatewayPortDraft] = useState('');
+  const [gatewayRouteAvailable, setGatewayRouteAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -145,15 +185,28 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
   // 权限管理（仅主用户）
   const [overview, setOverview] = useState<PermOverview | null>(null);
   const [permDrafts, setPermDrafts] = useState<Record<number, PermDraft>>({});
+  const [expandedPermissionUserId, setExpandedPermissionUserId] = useState<number | null>(null);
+  const [cardUserQuery, setCardUserQuery] = useState('');
   const [workspaces, setWorkspaces] = useState<Array<{ path: string; title: string }>>([]);
 
   const refresh = () => {
+    fetch('/gateway/api/me', { headers: { accept: 'application/json' } })
+      .then((response) => setGatewayRouteAvailable(
+        gatewayIdentityRouteAvailable(response.headers.get('content-type')),
+      ))
+      .catch(() => setGatewayRouteAvailable(null));
     api<StateData>('/api/dsh-passwords/state')
       .then((d) => {
         setData(d);
         setError('');
         if (d.me?.role === 'admin') {
-          api<PermOverview>('/gateway/api/overview')
+          api<GatewayConfig>('/api/dsh-passwords/gateway/config')
+            .then((gateway) => {
+              setGatewayConfig(gateway);
+              setGatewayPortDraft(String(gateway.port));
+            })
+            .catch(() => setGatewayConfig(null));
+          api<PermOverview>('/api/dsh-passwords/overview')
             .then((o) => {
               setOverview(o);
               const drafts: Record<number, PermDraft> = {};
@@ -188,8 +241,9 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
     refresh();
   }, []);
 
-  const isAdmin = data?.me?.role === 'admin';
-  const me = data?.me?.username ?? '';
+  const identity = resolveCardIdentity(data, gatewayRouteAvailable);
+  const isAdmin = identity.kind === 'admin';
+  const me = identity.kind === 'admin' || identity.kind === 'user' ? identity.username : '';
 
   const run = async (fn: () => Promise<void>, okMessage: string) => {
     setBusy(true);
@@ -215,6 +269,19 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
         window.location.reload();
       }, 6000);
     }, t('reloading'));
+  };
+
+  const saveGatewayPort = () => {
+    const port = Number(gatewayPortDraft);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      setError(t('gatewayPortInvalid'));
+      return;
+    }
+    void run(async () => {
+      const updated = await api<GatewayConfig>('/api/dsh-passwords/gateway/config', { port: gatewayPortDraft });
+      setGatewayConfig(updated);
+      setGatewayPortDraft(String(updated.port));
+    }, t('gatewayPortSaved', { port }));
   };
 
   const changePassword = () => {
@@ -255,7 +322,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
     if (!d) return;
     void run(
       () =>
-        api('/gateway/api/permissions', {
+        api('/api/dsh-passwords/permissions', {
           userId,
           allowedFolders: d.folders,
           hourlyTokenLimit: d.token.trim() === '' ? null : Number(d.token),
@@ -289,9 +356,21 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
         )
       : null;
 
-  const patchOk = patchState !== null && patchState.settingsHostMode && patchState.whitelist;
+  const patchPresentation = resolvePatchPresentation(identity, patchState);
   const patchText =
-    patchState === null ? t('patchUnknown') : patchOk ? t('patchOk') : t('patchBad');
+    patchPresentation === 'unknown'
+      ? t('patchUnknown')
+      : patchPresentation === 'ok'
+        ? t('patchOk')
+        : t('patchBad');
+
+  const cardUserNeedle = cardUserQuery.trim().toLocaleLowerCase();
+  const visibleCardUsers = (data?.users ?? []).filter((user) => {
+    if (cardUserNeedle === '') return true;
+    const details = overview?.users.find((candidate) => candidate.id === user.id);
+    return [user.username, details?.remark ?? '', details?.workspaceRoot ?? '']
+      .some((value) => value.toLocaleLowerCase().includes(cardUserNeedle));
+  });
 
   const header = h(
     'button',
@@ -310,10 +389,14 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
         'span',
         { className: 'dshpw-desc' },
         t('desc'),
-        h('strong', null, me || '—'),
-        isAdmin
-          ? h('span', { className: 'dshpw-badge admin' }, t('owner'))
-          : h('span', { className: 'dshpw-badge' }, t('subuser')),
+        h('strong', null, identity.kind === 'local' ? t('localDirect') : me || '—'),
+        identity.kind === 'local'
+          ? h('span', { className: 'dshpw-badge admin' }, t('fullAccess'))
+          : identity.kind === 'admin'
+            ? h('span', { className: 'dshpw-badge admin' }, t('owner'))
+            : identity.kind === 'user'
+              ? h('span', { className: 'dshpw-badge' }, t('subuser'))
+              : null,
       ),
     ),
     h(Chevron, { open }),
@@ -330,10 +413,40 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
       h(
         'div',
         { className: 'dshpw-row' },
-        h('span', { className: patchOk ? 'dshpw-ok' : 'dshpw-error' }, patchText),
+        h('span', { className: patchPresentation === 'ok' ? 'dshpw-ok' : 'dshpw-error' }, patchText),
         h('button', { className: 'dshpw-btn', disabled: busy, onClick: reloadPatch }, t('reloadPatch')),
       ),
       h('div', { className: 'dshpw-hint' }, t('patchHint1'), ' ', t('patchHint2')),
+      isAdmin &&
+        h(
+          'div',
+          { className: 'dshpw-gateway-port' },
+          h('span', { className: 'dshpw-hint' }, t('gatewayPort')),
+          h(
+            'div',
+            { className: 'dshpw-row' },
+            h('input', {
+              className: 'dshpw-input',
+              type: 'number',
+              min: 1,
+              max: 65535,
+              inputMode: 'numeric',
+              'aria-label': t('gatewayPort'),
+              value: gatewayPortDraft,
+              onChange: (e: { target: { value: string } }) => setGatewayPortDraft(e.target.value),
+            }),
+            h(
+              'button',
+              {
+                className: 'dshpw-btn',
+                disabled: busy || gatewayPortDraft === '' || gatewayPortDraft === String(gatewayConfig?.port ?? ''),
+                onClick: saveGatewayPort,
+              },
+              t('saveGatewayPort'),
+            ),
+          ),
+          h('div', { className: 'dshpw-hint' }, t('gatewayPortHint', { port: gatewayConfig?.port ?? '—' })),
+        ),
     ),
 
     // ── 修改密码 ──
@@ -387,29 +500,153 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
       h('div', { className: 'dshpw-hint' }, t('nameHint')),
     ),
 
-    // ── 子用户管理（仅主用户） ──
+    // ── 子用户管理与权限（仅主用户，点击用户行展开） ──
     isAdmin &&
       h(
         'div',
         { className: 'dshpw-section' },
         h('span', { className: 'dshpw-label' }, t('subusers')),
-        ...(data?.users ?? []).map((u) =>
-          h(
+        h('input', {
+          className: 'dshpw-input dshpw-card-user-search',
+          value: cardUserQuery,
+          placeholder: t('accountSearchUsers'),
+          onChange: (e: { target: { value: string } }) => setCardUserQuery(e.target.value),
+        }),
+        ...visibleCardUsers.map((u) => {
+          const permissionUser = overview?.users.find((candidate) => candidate.id === u.id);
+          const d = permDrafts[u.id];
+          const expanded = u.role === 'user' && expandedPermissionUserId === u.id;
+          const identity = h(
+            'span',
+            { className: 'dshpw-user-identity' },
+            u.username,
+            u.role === 'admin'
+              ? h('span', { className: 'dshpw-badge admin' }, t('owner'))
+              : h('span', { className: 'dshpw-badge' }, t('subuser')),
+            u.last_login_at ? h('span', { className: 'dshpw-hint' }, t('lastLogin', { time: u.last_login_at })) : null,
+          );
+          return h(
             'div',
-            { className: 'dshpw-user', key: u.id },
+            { className: 'dshpw-user-block', key: u.id },
             h(
-              'span',
-              null,
-              u.username,
-              u.role === 'admin'
-                ? h('span', { className: 'dshpw-badge admin' }, t('owner'))
-                : h('span', { className: 'dshpw-badge' }, t('subuser')),
-              u.last_login_at ? h('span', { className: 'dshpw-hint' }, t('lastLogin', { time: u.last_login_at })) : null,
+              'div',
+              { className: 'dshpw-user' },
+              u.role === 'user'
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'dshpw-user-toggle',
+                      'aria-expanded': expandedPermissionUserId === u.id,
+                      onClick: () => setExpandedPermissionUserId((current) => current === u.id ? null : u.id),
+                    },
+                    identity,
+                    h('span', { className: 'dshpw-user-chevron', 'aria-hidden': 'true' }, expanded ? '▴' : '▾'),
+                  )
+                : identity,
+              u.username !== me
+                ? h('button', { className: 'dshpw-btn danger', disabled: busy, onClick: () => removeUser(u.username) }, t('remove'))
+                : null,
             ),
-            u.username !== me &&
-              h('button', { className: 'dshpw-btn danger', disabled: busy, onClick: () => removeUser(u.username) }, t('remove')),
-          ),
-        ),
+            expanded
+              ? permissionUser && d
+                ? h(
+                    'div',
+                    { className: 'dshpw-perm dshpw-user-permission-editor' },
+                    h('div', { className: 'dshpw-hint' }, t('permsHint')),
+                    h(
+                      'div',
+                      { className: 'dshpw-perm-head' },
+                      permissionUser.usage
+                        ? h(
+                            'span',
+                            { className: 'dshpw-hint' },
+                            `${t('usageTime')} ${Math.round(permissionUser.usage.activeSeconds / 60)}m · ${t('usageTokens')} ${permissionUser.usage.hourlyTokens}`,
+                          )
+                        : null,
+                      permissionUser.permissions.banned ? h('span', { className: 'dshpw-badge' }, t('banned')) : null,
+                    ),
+                    h(
+                      'select',
+                      {
+                        className: 'dshpw-input',
+                        value: d.folders[0] ?? '',
+                        'aria-label': t('permsFolders'),
+                        onChange: (e: { target: { value: string } }) =>
+                          setDraft(u.id, { folders: e.target.value === '' ? [] : [e.target.value] }),
+                      },
+                      h('option', { value: '' }, t('permsAll')),
+                      ...((() => {
+                        const paths = Array.from(new Set([...workspaces.map((workspace) => workspace.path), ...d.folders]));
+                        return paths.map((workspacePath) => {
+                          const workspace = workspaces.find((candidate) => candidate.path === workspacePath);
+                          return h('option', { key: workspacePath, value: workspacePath }, workspace?.title || workspacePath);
+                        });
+                      })()),
+                    ),
+                    h(
+                      'select',
+                      {
+                        className: 'dshpw-input',
+                        value: d.sandbox,
+                        'aria-label': t('permsSandbox'),
+                        onChange: (e: { target: { value: string } }) => setDraft(u.id, { sandbox: e.target.value }),
+                      },
+                      h('option', { value: '' }, t('sandboxNone')),
+                      h('option', { value: 'read-only' }, t('sandboxReadOnly')),
+                      h('option', { value: 'workspace-write' }, t('sandboxWorkspace')),
+                      h('option', { value: 'danger-full-access' }, t('sandboxFull')),
+                    ),
+                    h(
+                      'div',
+                      { className: 'dshpw-row' },
+                      h('label', { className: 'dshpw-limit-field' },
+                        h('span', { className: 'dshpw-limit-label' }, t('permsToken')),
+                        h('input', {
+                          className: 'dshpw-input',
+                          type: 'number',
+                          min: 0,
+                          placeholder: t('permsToken'),
+                          value: d.token,
+                          onChange: (e: { target: { value: string } }) => setDraft(u.id, { token: e.target.value }),
+                        }),
+                      ),
+                      h('label', { className: 'dshpw-limit-field' },
+                        h('span', { className: 'dshpw-limit-label' }, t('permsMinutes')),
+                        h('input', {
+                          className: 'dshpw-input',
+                          type: 'number',
+                          min: 0,
+                          placeholder: t('permsMinutes'),
+                          value: d.minutes,
+                          onChange: (e: { target: { value: string } }) => setDraft(u.id, { minutes: e.target.value }),
+                        }),
+                      ),
+                    ),
+                    h(
+                      'div',
+                      { className: 'dshpw-row' },
+                      h('label', { className: 'dshpw-check' },
+                        h('input', { type: 'checkbox', checked: d.upload, onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { upload: e.target.checked }) }),
+                        t('permsUpload'),
+                      ),
+                      h('label', { className: 'dshpw-check' },
+                        h('input', { type: 'checkbox', checked: d.git, onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { git: e.target.checked }) }),
+                        t('permsGit'),
+                      ),
+                      h('label', { className: 'dshpw-check' },
+                        h('input', { type: 'checkbox', checked: d.banned, onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { banned: e.target.checked }) }),
+                        t('permsBanned'),
+                      ),
+                    ),
+                    h('div', { className: 'dshpw-row' },
+                      h('button', { className: 'dshpw-btn', disabled: busy, onClick: () => savePermissions(u.id) }, t('permsSave')),
+                    ),
+                  )
+                : h('div', { className: 'dshpw-hint dshpw-user-permission-editor' }, t('accountLoading'))
+              : null,
+          );
+        }),
         h('input', {
           className: 'dshpw-input',
           placeholder: t('subNamePh'),
@@ -424,139 +661,10 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
           value: addPw,
           onChange: (e: { target: { value: string } }) => setAddPw(e.target.value),
         }),
-        h(
-          'div',
-          { className: 'dshpw-row' },
+        h('div', { className: 'dshpw-row' },
           h('button', { className: 'dshpw-btn', disabled: busy, onClick: addSubUser }, t('addSub')),
         ),
         h('div', { className: 'dshpw-hint' }, t('subHint')),
-      ),
-
-    // ── 子用户权限（仅主用户） ──
-    isAdmin &&
-      overview !== null &&
-      h(
-        'div',
-        { className: 'dshpw-section' },
-        h('span', { className: 'dshpw-label' }, t('perms')),
-        h('div', { className: 'dshpw-hint' }, t('permsHint')),
-        ...overview.users
-          .filter((u) => u.role === 'user')
-          .map((u) => {
-            const d = permDrafts[u.id];
-            if (!d) return null;
-            return h(
-              'div',
-              { className: 'dshpw-perm', key: u.id },
-              h(
-                'div',
-                { className: 'dshpw-perm-head' },
-                h('strong', null, u.username),
-                u.usage
-                  ? h(
-                      'span',
-                      { className: 'dshpw-hint' },
-                      `${t('usageTime')} ${Math.round(u.usage.activeSeconds / 60)}m · ${t('usageTokens')} ${u.usage.hourlyTokens}`,
-                    )
-                  : null,
-                u.permissions.banned ? h('span', { className: 'dshpw-badge' }, t('banned')) : null,
-              ),
-              h(
-                'select',
-                {
-                  className: 'dshpw-input',
-                  value: d.folders[0] ?? '',
-                  'aria-label': t('permsFolders'),
-                  onChange: (e: { target: { value: string } }) =>
-                    setDraft(u.id, { folders: e.target.value === '' ? [] : [e.target.value] }),
-                },
-                h('option', { value: '' }, t('permsAll')),
-                ...((() => {
-                  const paths = Array.from(new Set([...workspaces.map((w) => w.path), ...d.folders]));
-                  return paths.map((p) => {
-                    const ws = workspaces.find((w) => w.path === p);
-                    return h('option', { key: p, value: p }, ws?.title || p);
-                  });
-                })()),
-              ),
-              h(
-                'select',
-                {
-                  className: 'dshpw-input',
-                  value: d.sandbox,
-                  'aria-label': t('permsSandbox'),
-                  onChange: (e: { target: { value: string } }) => setDraft(u.id, { sandbox: e.target.value }),
-                },
-                h('option', { value: '' }, t('sandboxNone')),
-                h('option', { value: 'read-only' }, t('sandboxReadOnly')),
-                h('option', { value: 'workspace-write' }, t('sandboxWorkspace')),
-                h('option', { value: 'danger-full-access' }, t('sandboxFull')),
-              ),
-              h(
-                'div',
-                { className: 'dshpw-row' },
-                h('input', {
-                  className: 'dshpw-input',
-                  type: 'number',
-                  min: 0,
-                  placeholder: t('permsToken'),
-                  value: d.token,
-                  onChange: (e: { target: { value: string } }) => setDraft(u.id, { token: e.target.value }),
-                }),
-                h('input', {
-                  className: 'dshpw-input',
-                  type: 'number',
-                  min: 0,
-                  placeholder: t('permsMinutes'),
-                  value: d.minutes,
-                  onChange: (e: { target: { value: string } }) => setDraft(u.id, { minutes: e.target.value }),
-                }),
-              ),
-              h(
-                'div',
-                { className: 'dshpw-row' },
-                h(
-                  'label',
-                  { className: 'dshpw-check' },
-                  h('input', {
-                    type: 'checkbox',
-                    checked: d.upload,
-                    onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { upload: e.target.checked }),
-                  }),
-                  t('permsUpload'),
-                ),
-                h(
-                  'label',
-                  { className: 'dshpw-check' },
-                  h('input', {
-                    type: 'checkbox',
-                    checked: d.git,
-                    onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { git: e.target.checked }),
-                  }),
-                  t('permsGit'),
-                ),
-                h(
-                  'label',
-                  { className: 'dshpw-check' },
-                  h('input', {
-                    type: 'checkbox',
-                    checked: d.banned,
-                    onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { banned: e.target.checked }),
-                  }),
-                  t('permsBanned'),
-                ),
-              ),
-              h(
-                'div',
-                { className: 'dshpw-row' },
-                h(
-                  'button',
-                  { className: 'dshpw-btn', disabled: busy, onClick: () => savePermissions(u.id) },
-                  t('permsSave'),
-                ),
-              ),
-            );
-          }),
       ),
 
     error && h('div', { className: 'dshpw-error' }, error),

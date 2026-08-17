@@ -25,6 +25,8 @@ export interface PlatformConfig {
   dbPath: string;
   /** 数据静态加密密钥（可选，留空则从 SETUP_KEY 派生） */
   dbEncKey: string;
+  /** 子用户按用户名分配时使用的默认工作区根目录 */
+  workspaceRoot: string;
   /** 登录网关（dsh 访问门卫）：对外端口 + 上游 dsh 地址 */
   gateway: {
     host: string;
@@ -50,7 +52,7 @@ export interface PlatformConfig {
   internalSecret: string;
   /** 远程设置补丁（settings host 模式 + 白名单）管理配置；补丁强制启用，无开关 */
   patch: {
-    /** dsh 安装根目录（@deepseek-ai/dsh 所在位置）；留空自动探测 npm root -g */
+    /** DSH 安装前缀或 @deepseek-ai/dsh 包目录；留空从当前启动文件和 npm 全局目录探测 */
     dshRoot: string;
     /** 补丁应用后要重启的 dsh systemd 服务名；留空则不自动重启 */
     restartService: string;
@@ -104,6 +106,7 @@ export function loadConfig(): PlatformConfig {
     setupKey,
     dbPath,
     dbEncKey: readEnv('MCP_DB_ENC_KEY', ''),
+    workspaceRoot: readEnv('MCP_WORKSPACE_ROOT', path.join(path.dirname(dbPath), 'workspaces')),
     gateway: {
       host: readEnv('MCP_GATEWAY_HOST', '0.0.0.0'),
       port: Number(readEnv('MCP_GATEWAY_PORT', '8080')),

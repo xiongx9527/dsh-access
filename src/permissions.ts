@@ -1,7 +1,7 @@
 // 子用户权限模型 + 网关侧强制执行的纯函数（无 DB/框架依赖，便于复用与测试）。
 //
 // 权限（主用户在设置卡片里为每个子用户配置）：
-//   - allowedFolders    允许打开的工作区/项目文件夹（绝对路径；空数组 = 全部允许）
+//   - allowedFolders    允许打开的唯一工作区根目录（绝对路径；空数组 = 未分配，拒绝访问）
 //   - hourlyTokenLimit  每小时 token 上限（null = 不限）
 //   - dailyMinutesLimit 每日使用时长上限，分钟（从当天首次使用起算；null = 不限）
 //   - allowUpload       是否允许上传文件
@@ -32,19 +32,44 @@ export function defaultPermissions(): UserPermissions {
 }
 
 /** 规范化路径：反斜杠转正斜杠、去尾部斜杠，便于前缀比较 */
-function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/\/+$/, '');
+function normalizePath(input: string): string | null {
+  let decoded = input;
+  try {
+    // Decode repeatedly so double-encoded traversal cannot survive the boundary check.
+    for (let i = 0; i < 3; i += 1) {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    }
+  } catch {
+    return null;
+  }
+  if (decoded.includes('\0')) return null;
+  const slashPath = decoded.replace(/\\/g, '/');
+  const absolutePrefix = slashPath.startsWith('/') ? '/' : '';
+  const drive = slashPath.match(/^[A-Za-z]:\//)?.[0] ?? '';
+  const segments: string[] = [];
+  for (const segment of slashPath.split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      if (segments.length === 0) return null;
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  const body = segments.join('/');
+  const normalized = drive !== '' ? `${drive}${body.slice(drive.length - 1)}` : absolutePrefix + body;
+  return normalized.replace(/\/+$/, '') || absolutePrefix || null;
 }
 
-/** path 是否命中 allowed 白名单（相等或为某白名单目录的子路径；空白名单 = 全部允许） */
-export function folderAllowed(path: string, allowedFolders: string[]): boolean {
-  if (allowedFolders.length === 0) return true;
-  const p = normalizePath(path);
-  return allowedFolders.some((entry) => {
-    const base = normalizePath(entry);
-    if (base === '') return false;
-    return p === base || p.startsWith(base + '/');
-  });
+/** path 是否命中唯一授权根（相等或为其子路径；空分配一律拒绝）。 */
+export function folderAllowed(candidate: string, allowedFolders: string[]): boolean {
+  if (allowedFolders.length !== 1) return false;
+  const target = normalizePath(candidate);
+  const base = normalizePath(allowedFolders[0]);
+  if (target === null || base === null || base === '') return false;
+  return target === base || target.startsWith(base + '/');
 }
 
 /**
@@ -85,7 +110,8 @@ export function collectIdPathPairs(value: unknown, out: Map<string, string> = ne
     for (const item of value) collectIdPathPairs(item, out);
   } else if (value !== null && typeof value === 'object') {
     const obj = value as Record<string, unknown>;
-    if (typeof obj.id === 'string' && typeof obj.path === 'string') out.set(obj.id, obj.path);
+    const id = typeof obj.workspaceId === 'string' ? obj.workspaceId : obj.id;
+    if (typeof id === 'string' && typeof obj.path === 'string') out.set(id, obj.path);
     for (const v of Object.values(obj)) collectIdPathPairs(v, out);
   }
   return out;
@@ -250,13 +276,13 @@ export function aionuiRootFrom(
 
 /** 工作区创建/删除等写操作（受限子用户直接禁止，防止绕过文件夹白名单） */
 export function isWorkspaceWrite(pathname: string): boolean {
-  return /^\/api\/workspace[.\/](add|create|import|remove|delete)/.test(pathname);
+  return /^\/api\/workspace[.\/](add|import|remove)/.test(pathname);
 }
 
 // ── 工作区/会话文件夹限制：需要读 JSON 请求体 ──────────────────────────
 
 /** 涉及创建/切换工作区的 dsh typert RPC（斜杠风格：/api/session/create 等；兼容点号风格） */
-export const WORKSPACE_ENDPOINT_RE = /^\/api\/session[.\/](create|fork)/;
+export const WORKSPACE_ENDPOINT_RE = /^\/api\/(?:session[.\/](?:create|fork)|workspace[.\/](?:create|delete))$/;
 
 /** 请求体里可能携带目标路径的字段名（按优先级） */
 const PATH_FIELDS = [

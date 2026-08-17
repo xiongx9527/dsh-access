@@ -22,6 +22,13 @@ import { Database, type UserListRow } from './db.js';
 import { createFieldCrypto } from './encrypt.js';
 import { AuthService, AuthError, assertNoSqlInjection, type AuthedUser, type RequestMeta } from './auth.js';
 import { findDshRoot, patchStatus } from './patch.js';
+import { assignWorkspace } from './workspace-assignment.js';
+import { parseGatewayPort, writeEnvFileAtomic, writeGatewayPort } from './gateway-settings.js';
+import {
+  GATEWAY_PROXY_HEADER,
+  isDirectLocalPluginRequest,
+  resolvePluginCaller,
+} from './local-access.js';
 
 /** 稳定 cordis 插件名（insert 进 cordis.yml 时用同一个名字） */
 export const name = 'dsh-passwords';
@@ -83,6 +90,24 @@ function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   });
 }
 
+function localDay(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function limitValue(value: unknown, fallback: number | null): number | null {
+  if (value === null || value === '') return null;
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error('limit must be a non-negative integer or null');
+  }
+  return parsed;
+}
+
 /** 通知网关进程：重载补丁 + 延迟重启 dsh-web（fire-and-forget） */
 function notifyGateway(cfg: PlatformConfig): void {
   const mod = cfg.gateway.tls !== null ? https : http;
@@ -136,10 +161,133 @@ function gatewayAlreadyRunning(port: number): Promise<boolean> {
  * 无需任何额外启动命令。dsh 退出时（ctx.dispose）子进程随停；
  * 网关侧另有父进程看门狗兜底（宿主被强杀时自己退出）。
  */
-function startGateway(ctx: Context, cfg: PlatformConfig): void {
+interface GatewayRuntime {
+  readonly envPath: string;
+  readonly port: number;
+  restart(port: number): Promise<void>;
+}
+
+function gatewayRuntimeError(code: string, message: string): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
+}
+
+function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    timer.unref();
+    child.once('exit', finish);
+  });
+}
+
+async function waitForGatewayPort(port: number, child: ChildProcess, launchError: () => Error | null): Promise<void> {
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    const error = launchError();
+    if (error) throw error;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '网关进程在端口就绪前退出');
+    }
+    if (await gatewayAlreadyRunning(port)) return;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+  throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', `网关端口 ${String(port)} 启动超时`);
+}
+
+/**
+ * 自动拉起外部密码门，并暴露只管理本插件子进程的重启控制器。
+ * 端口变更时不重启 3080，只替换网关子进程。
+ */
+function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
   const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const cliPath = path.join(installRoot, 'dist', 'cli.js');
-  const gatewayPort = cfg.gateway.port;
+  const envPath = process.env.DSH_PASSWORDS_ENV_FILE?.trim() || path.join(installRoot, '.env');
+  const detectedDshRoot = findDshRoot(cfg.patch.dshRoot);
+  let activePort = cfg.gateway.port;
+  let disposed = false;
+  let child: ChildProcess | null = null;
+  const expectedStops = new WeakSet<ChildProcess>();
+
+  const stopChild = async (): Promise<void> => {
+    const target = child;
+    child = null;
+    if (target === null || target.exitCode !== null || target.signalCode !== null) return;
+    expectedStops.add(target);
+    target.kill('SIGTERM');
+    await waitForChildExit(target, 3000);
+    if (target.exitCode === null && target.signalCode === null) {
+      try {
+        target.kill('SIGKILL');
+      } catch {
+        // 已退出。
+      }
+      await waitForChildExit(target, 1000);
+    }
+  };
+
+  const launch = async (port: number): Promise<void> => {
+    if (disposed) throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '网关控制器已停止');
+    if (!existsSync(cliPath)) {
+      throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '密码门未编译（缺少 dist/cli.js）');
+    }
+    let upstreamPort = 3080;
+    try {
+      const wsPort = (ctx.webServer as unknown as { port?: number }).port;
+      if (typeof wsPort === 'number' && wsPort > 0) upstreamPort = wsPort;
+    } catch {
+      // 拿不到就用默认值。
+    }
+    const explicitUpstream = process.env.MCP_GATEWAY_UPSTREAM?.trim() ?? '';
+    const gatewayArgs =
+      explicitUpstream !== ''
+        ? [cliPath, 'serve-gateway']
+        : [cliPath, 'serve-gateway', '--upstream', `http://127.0.0.1:${String(upstreamPort)}`];
+    let spawnError: Error | null = null;
+    const launched = spawn(process.execPath, gatewayArgs, {
+      cwd: installRoot,
+      env: {
+        ...process.env,
+        MCP_GATEWAY_PORT: String(port),
+        DSH_GATEWAY_PARENT_PID: String(process.pid),
+        DSH_PASSWORDS_ENV_FILE: envPath,
+        MCP_DSH_ROOT: detectedDshRoot ?? '',
+      },
+      stdio: ['ignore', 'inherit', 'inherit'],
+    });
+    child = launched;
+    launched.once('error', (error) => {
+      spawnError = error;
+      console.error('[dsh-passwords] 密码门拉起失败:', error);
+    });
+    launched.on('exit', (code, signal) => {
+      if (child === launched) child = null;
+      if (disposed || expectedStops.has(launched)) return;
+      const reason = code ?? signal ?? 'unknown';
+      if (reason === EXIT_CERT_FAILED) {
+        console.error('[dsh-passwords] 密码门未启动（错误码 30：HTTPS 证书签发失败）。检查 80/443 端口与网络；或运行 scripts/start-http.mjs 改用明文 HTTP（有被嗅探风险）');
+      } else if (reason === EXIT_NO_DOMAIN) {
+        console.error('[dsh-passwords] 密码门未启动（错误码 31：无法确定公网 IP/域名）。或运行 scripts/start-http.mjs 改用明文 HTTP（有被嗅探风险）');
+      } else {
+        console.error(`[dsh-passwords] 密码门进程已退出（code=${String(reason)}）。重启 dsh 会自动再次拉起`);
+      }
+    });
+    try {
+      await waitForGatewayPort(port, launched, () => spawnError);
+      activePort = port;
+    } catch (error) {
+      if (child === launched) child = null;
+      expectedStops.add(launched);
+      if (launched.exitCode === null && launched.signalCode === null) launched.kill('SIGTERM');
+      throw error;
+    }
+  };
 
   ctx.effect(
     () => {
@@ -149,73 +297,41 @@ function startGateway(ctx: Context, cfg: PlatformConfig): void {
         return noop;
       }
       if (process.env.DSH_PASSWORDS_NO_AUTOSTART === '1') return noop;
-      let disposed = false;
-      let child: ChildProcess | null = null;
-
-      void gatewayAlreadyRunning(gatewayPort).then((running) => {
+      void gatewayAlreadyRunning(activePort).then((running) => {
         if (disposed) return;
         if (running) {
-          console.error(`[dsh-passwords] 密码门已在运行（端口 ${String(gatewayPort)}），跳过自动拉起`);
+          console.error(`[dsh-passwords] 密码门已在运行（端口 ${String(activePort)}），跳过自动拉起`);
           return;
         }
-        // 网关上游 = dsh 自己的 web 端口（webServer 服务在运行时可知；拿不到就退回默认 3080）。
-        // 用户显式配置过 MCP_GATEWAY_UPSTREAM（.env/环境变量）则尊重之，不自动覆盖。
-        let upstreamPort = 3080;
-        try {
-          const wsPort = (ctx.webServer as unknown as { port?: number }).port;
-          if (typeof wsPort === 'number' && wsPort > 0) upstreamPort = wsPort;
-        } catch {
-          // 拿不到就用默认值
-        }
-        const explicitUpstream = process.env.MCP_GATEWAY_UPSTREAM?.trim() ?? '';
-        const gatewayArgs =
-          explicitUpstream !== ''
-            ? [cliPath, 'serve-gateway']
-            : [cliPath, 'serve-gateway', '--upstream', `http://127.0.0.1:${String(upstreamPort)}`];
-        child = spawn(process.execPath, gatewayArgs, {
-          cwd: installRoot,
-          env: {
-            ...process.env,
-            DSH_GATEWAY_PARENT_PID: String(process.pid),
-            DSH_PASSWORDS_ENV_FILE: path.join(installRoot, '.env'),
-          },
-          stdio: ['ignore', 'inherit', 'inherit'],
-        });
-        child.on('error', (error) => {
-          console.error('[dsh-passwords] 密码门拉起失败:', error);
-        });
-        child.on('exit', (code, signal) => {
-          if (disposed) return;
-          const reason = code ?? signal ?? 'unknown';
-          if (reason === EXIT_CERT_FAILED) {
-            console.error('[dsh-passwords] 密码门未启动（错误码 30：HTTPS 证书签发失败）。检查 80/443 端口与网络；或运行 scripts/start-http.mjs 改用明文 HTTP（有被嗅探风险）');
-          } else if (reason === EXIT_NO_DOMAIN) {
-            console.error('[dsh-passwords] 密码门未启动（错误码 31：无法确定公网 IP/域名）。或运行 scripts/start-http.mjs 改用明文 HTTP（有被嗅探风险）');
-          } else {
-            console.error(`[dsh-passwords] 密码门进程已退出（code=${String(reason)}）。重启 dsh 会自动再次拉起`);
-          }
+        void launch(activePort).catch((error) => {
+          console.error('[dsh-passwords] 密码门启动失败:', error);
         });
       });
-
       return () => {
         disposed = true;
-        if (child !== null && child.exitCode === null && child.signalCode === null) {
-          child.kill('SIGTERM');
-          const force = setTimeout(() => {
-            if (child !== null && child.exitCode === null) {
-              try {
-                child.kill('SIGKILL');
-              } catch {
-                // 已退出
-              }
-            }
-          }, 3000);
-          force.unref();
-        }
+        void stopChild();
       };
     },
     'dsh-passwords: gateway autostart',
   );
+
+  return {
+    envPath,
+    get port() {
+      return activePort;
+    },
+    async restart(port: number): Promise<void> {
+      if (port === activePort && child !== null && child.exitCode === null && child.signalCode === null) return;
+      if (port !== activePort && (await gatewayAlreadyRunning(port))) {
+        throw gatewayRuntimeError('PORT_IN_USE', `端口 ${String(port)} 已被占用`);
+      }
+      if (child === null && (await gatewayAlreadyRunning(activePort))) {
+        throw gatewayRuntimeError('GATEWAY_NOT_MANAGED', '当前网关不是由本 DSH 进程启动，请重启 DSH 后再修改端口');
+      }
+      await stopChild();
+      await launch(port);
+    },
+  };
 }
 
 export function apply(ctx: Context): void {
@@ -274,7 +390,15 @@ export function apply(ctx: Context): void {
       });
       return null;
     }
-    const caller = callerOf(req);
+    const caller = resolvePluginCaller(
+      callerOf(req),
+      isDirectLocalPluginRequest({
+        remoteAddress: req.socket.remoteAddress,
+        host: req.headers.host,
+        gatewayMarker: req.headers[GATEWAY_PROXY_HEADER],
+      }),
+      db.listUsers(),
+    );
     if (!caller) {
       writeJson(res, 401, { ok: false, code: 'NOT_AUTHENTICATED', error: '未登录或会话已失效' });
       return null;
@@ -300,6 +424,8 @@ export function apply(ctx: Context): void {
     });
   };
 
+  const gatewayRuntime = configured ? startGateway(ctx, cfg) : null;
+
   // ── /api/dsh-passwords/* 路由（exact 路由先于连接插件的 /api 前缀命中） ──
   const routes: WebRoute[] = [
     {
@@ -314,6 +440,226 @@ export function apply(ctx: Context): void {
           me: { username: caller.username, role: caller.role },
           users,
         });
+      },
+    },
+    {
+      kind: 'exact',
+      path: '/api/dsh-passwords/gateway/config',
+      handler: async (req, res) => {
+        const caller = guard(req, res);
+        if (!caller) return;
+        if (caller.role !== 'admin') {
+          writeJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '仅主用户可修改网关配置' });
+          return;
+        }
+        if (req.method === 'GET') {
+          writeJson(res, 200, {
+            ok: true,
+            port: gatewayRuntime?.port ?? cfg.gateway.port,
+            host: cfg.gateway.host,
+            upstream: cfg.gateway.upstream,
+          });
+          return;
+        }
+        if (req.method !== 'POST') {
+          writeJson(res, 405, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'method not allowed' });
+          return;
+        }
+        const directLocal = isDirectLocalPluginRequest({
+          remoteAddress: req.socket.remoteAddress,
+          host: req.headers.host,
+          gatewayMarker: req.headers[GATEWAY_PROXY_HEADER],
+        });
+        if (!directLocal) {
+          writeJson(res, 403, {
+            ok: false,
+            code: 'GATEWAY_CONFIG_LOCAL_ONLY',
+            error: '修改网关端口只能在本机 3080 设置页面操作',
+          });
+          return;
+        }
+        if (gatewayRuntime === null) {
+          writeJson(res, 503, { ok: false, code: 'NOT_CONFIGURED', error: '网关尚未配置' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req);
+          let upstreamPort: number | null = null;
+          try {
+            const upstream = new URL(cfg.gateway.upstream);
+            upstreamPort = upstream.port !== '' ? Number(upstream.port) : upstream.protocol === 'https:' ? 443 : 80;
+          } catch {
+            upstreamPort = null;
+          }
+          const port = parseGatewayPort(body.port, upstreamPort);
+          const previousPort = gatewayRuntime.port;
+          if (port === previousPort) {
+            writeJson(res, 200, { ok: true, port, host: cfg.gateway.host, upstream: cfg.gateway.upstream });
+            return;
+          }
+          if (await gatewayAlreadyRunning(port)) {
+            writeJson(res, 409, { ok: false, code: 'PORT_IN_USE', error: `端口 ${String(port)} 已被占用` });
+            return;
+          }
+          const previousProcessValue = process.env.MCP_GATEWAY_PORT;
+          const previousEnv = writeGatewayPort(gatewayRuntime.envPath, port);
+          process.env.MCP_GATEWAY_PORT = String(port);
+          try {
+            await gatewayRuntime.restart(port);
+            cfg.gateway.port = port;
+            writeJson(res, 200, { ok: true, port, host: cfg.gateway.host, upstream: cfg.gateway.upstream });
+          } catch (error) {
+            writeEnvFileAtomic(gatewayRuntime.envPath, previousEnv);
+            if (previousProcessValue === undefined) delete process.env.MCP_GATEWAY_PORT;
+            else process.env.MCP_GATEWAY_PORT = previousProcessValue;
+            cfg.gateway.port = previousPort;
+            try {
+              await gatewayRuntime.restart(previousPort);
+            } catch (rollbackError) {
+              console.error('[dsh-passwords] 网关端口回滚失败:', rollbackError);
+            }
+            const code = error instanceof Error && 'code' in error ? String((error as Error & { code: unknown }).code) : 'GATEWAY_RESTART_FAILED';
+            writeJson(res, code === 'PORT_IN_USE' ? 409 : 500, {
+              ok: false,
+              code,
+              error: error instanceof Error ? error.message : '网关重启失败，已恢复原端口',
+            });
+          }
+        } catch (error) {
+          writeJson(res, 400, {
+            ok: false,
+            code: 'INVALID_GATEWAY_PORT',
+            error: error instanceof Error ? error.message : '网关端口无效',
+          });
+        }
+      },
+    },
+    {
+      kind: 'exact',
+      path: '/api/dsh-passwords/overview',
+      handler: (req, res) => {
+        const caller = guard(req, res);
+        if (!caller) return;
+        if (caller.role !== 'admin') {
+          writeJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '仅主用户可查看账号概览' });
+          return;
+        }
+        const day = localDay();
+        const users = db!.listUsers().map((user) => {
+          const perms = db!.getPermissions(user.id);
+          const usage = db!.getUsage(user.id, day);
+          return {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            remark: perms?.remark ?? '',
+            workspaceRoot: perms?.workspace_root ?? null,
+            permissions: {
+              allowedFolders: perms?.allowed_folders ?? [],
+              hourlyTokenLimit: perms?.hourly_token_limit ?? null,
+              dailyMinutesLimit: perms?.daily_minutes_limit ?? null,
+              allowUpload: perms?.allow_upload ?? false,
+              allowGitDownload: perms?.allow_git_download ?? false,
+              banned: perms?.banned ?? false,
+              sandboxMode: perms?.sandbox_mode ?? null,
+            },
+            usage: usage
+              ? {
+                  day: usage.day,
+                  activeSeconds: usage.active_seconds,
+                  hourlyTokens: usage.hourly_tokens,
+                  firstSeenAt: usage.first_seen_at,
+                  lastActiveAt: usage.last_active_at,
+                }
+              : null,
+          };
+        });
+        writeJson(res, 200, {
+          ok: true,
+          me: { id: caller.userId, username: caller.username, role: caller.role },
+          users,
+        });
+      },
+    },
+    {
+      kind: 'exact',
+      path: '/api/dsh-passwords/permissions',
+      handler: async (req, res) => {
+        const caller = guard(req, res);
+        if (!caller) return;
+        if (caller.role !== 'admin') {
+          writeJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '仅主用户可修改权限' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req);
+          const userId = Number(body.userId);
+          if (!Number.isInteger(userId) || userId <= 0) {
+            writeJson(res, 400, { ok: false, code: 'INVALID_USER', error: 'userId 无效' });
+            return;
+          }
+          const target = db!.getUserById(userId);
+          const current = db!.getPermissions(userId);
+          if (!target || target.role !== 'user' || !current) {
+            writeJson(res, 404, { ok: false, code: 'NO_SUCH_USER', error: '子用户不存在' });
+            return;
+          }
+          const requestedFolders = Array.isArray(body.allowedFolders)
+            ? body.allowedFolders.filter(
+                (value): value is string => typeof value === 'string' && value.trim() !== '',
+              )
+            : [];
+          const desiredRoot = requestedFolders[0] ?? current.workspace_root;
+          if (desiredRoot === null) {
+            writeJson(res, 400, {
+              ok: false,
+              code: 'WORKSPACE_REQUIRED',
+              error: '必须分配一个工作区域',
+            });
+            return;
+          }
+          const assignment =
+            desiredRoot === current.workspace_root
+              ? {
+                  mode: current.workspace_mode === 'username' ? ('username' as const) : ('specified' as const),
+                  root: desiredRoot,
+                }
+              : assignWorkspace({
+                  mode: 'specified',
+                  username: target.username,
+                  baseRoot: cfg.workspaceRoot,
+                  specifiedRoot: desiredRoot,
+                });
+          const rawSandbox = body.sandboxMode;
+          const sandboxMode =
+            rawSandbox === 'read-only' ||
+            rawSandbox === 'workspace-write' ||
+            rawSandbox === 'danger-full-access'
+              ? rawSandbox
+              : current.sandbox_mode ?? 'workspace-write';
+          db!.setPermissions(userId, {
+            allowedFolders: [assignment.root],
+            hourlyTokenLimit: limitValue(body.hourlyTokenLimit, current.hourly_token_limit),
+            dailyMinutesLimit: limitValue(body.dailyMinutesLimit, current.daily_minutes_limit),
+            allowUpload: typeof body.allowUpload === 'boolean' ? body.allowUpload : current.allow_upload,
+            allowGitDownload:
+              typeof body.allowGitDownload === 'boolean'
+                ? body.allowGitDownload
+                : current.allow_git_download,
+            banned: typeof body.banned === 'boolean' ? body.banned : current.banned,
+            sandboxMode,
+            workspaceMode: assignment.mode,
+            workspaceRoot: assignment.root,
+            remark: current.remark,
+          });
+          writeJson(res, 200, { ok: true });
+        } catch (error) {
+          writeJson(res, 400, {
+            ok: false,
+            code: 'INVALID_PERMISSIONS',
+            error: error instanceof Error ? error.message : '权限保存失败',
+          });
+        }
       },
     },
     {
@@ -442,6 +788,4 @@ export function apply(ctx: Context): void {
     'dsh-passwords: user management routes',
   );
 
-  // 自动拉起密码门（.env 未配置时跳过，避免在未安装的环境里误启）
-  if (configured) startGateway(ctx, cfg);
 }

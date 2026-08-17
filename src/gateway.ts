@@ -5,7 +5,7 @@
 import http, { type IncomingMessage } from 'node:http';
 import https from 'node:https';
 import { createSecureContext } from 'node:tls';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,12 +44,22 @@ import {
 } from './permissions.js';
 import { findDshRoot, applyRemotePatch, restartDshWeb } from './patch.js';
 import { t, resolveGatewayLang, type Lang } from './i18n.js';
+import { assignWorkspace } from './workspace-assignment.js';
+import { classifyGatewayRequest } from './request-policy.js';
+import { UserConnectionRegistry } from './connection-registry.js';
+import { authorizeFilesystemPath } from './path-policy.js';
+import { markGatewayProxyHeaders } from './local-access.js';
 
 /** 网关内部扩展请求：权限执行时把用户/权限附在 req 上，供后续中间件与代理读取 */
 type Req = Request & {
   dshpwUser?: number;
   dshpwPerms?: UserPermissionsRow;
 };
+
+export interface GatewayHooks {
+  /** Register or idempotently resolve the canonical directory in DSH. */
+  ensureWorkspace?: (root: string) => Promise<void>;
+}
 
 const COOKIE_NAME = 'dsh_gateway_token';
 /** 语言偏好 cookie（用户在登录页手动切换后持久化） */
@@ -339,7 +349,6 @@ function renderLoginPage(params: { lang: Lang; next: string; error?: string; dbH
   <div class="logo">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="white" stroke-width="1.6"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </div>
-  ${langSwitch(params.lang, params.next)}
   <h1>${tr('gw.loginTitle')}</h1>
   <p class="sub">${tr('gw.loginSub1')}<br/>${tr('gw.loginSub2')}</p>
   <form method="POST" action="/gateway/login" id="login-form">
@@ -456,6 +465,7 @@ export function createGatewayServer(
   config: PlatformConfig,
   auth: AuthService,
   db: Database,
+  hooks: GatewayHooks = {},
 ): http.Server {
   const app = express();
   // 不泄露框架信息
@@ -497,38 +507,185 @@ export function createGatewayServer(
   // 避免每个代理请求都新建一次 TCP 握手
   const upstreamAgent = new http.Agent({ keepAlive: true, maxSockets: 64, keepAliveMsecs: 30_000 });
 
-  // workspaceId → 规范路径 映射：从 workspace.list 响应里收集，供 session.create 用 workspaceId 时解析路径
+  const ensureWorkspace = hooks.ensureWorkspace ?? ((root: string) =>
+    new Promise<void>((resolve, reject) => {
+      const payload = JSON.stringify({
+        type: 'client-request',
+        rpcId: randomBytes(12).toString('hex'),
+        method: 'workspace.create',
+        payload: { path: root },
+      });
+      const request = http.request({
+        hostname: upstreamHost,
+        port: upstreamPort,
+        path: '/api/workspace.create',
+        method: 'POST',
+        headers: {
+          host: `${upstreamHost}:${upstreamPort}`,
+          origin: `http://${upstreamHost}:${upstreamPort}`,
+          'content-type': 'application/json',
+          'content-length': String(Buffer.byteLength(payload)),
+        },
+        agent: upstreamAgent,
+      }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => {
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+              result?: { ok?: boolean; error?: { message?: string } };
+            };
+            if (response.statusCode !== 200 || body.result?.ok !== true) {
+              reject(new Error(body.result?.error?.message ?? `workspace.create HTTP ${response.statusCode ?? 0}`));
+              return;
+            }
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+      request.on('error', reject);
+      request.end(payload);
+    }));
+
+  function collectWorkspaceSessionCounts(value: unknown, out: Map<string, number>): void {
+    if (Array.isArray(value)) {
+      for (const item of value) collectWorkspaceSessionCounts(item, out);
+      return;
+    }
+    if (value === null || typeof value !== 'object') return;
+    const obj = value as Record<string, unknown>;
+    const id = typeof obj.workspaceId === 'string' ? obj.workspaceId : obj.id;
+    if (typeof id === 'string' && Array.isArray(obj.sessionIds)) out.set(id, obj.sessionIds.length);
+    for (const nested of Object.values(obj)) collectWorkspaceSessionCounts(nested, out);
+  }
+
+  function collectSessionPathPairs(value: unknown, out: Map<string, string>): void {
+    if (Array.isArray(value)) {
+      for (const item of value) collectSessionPathPairs(item, out);
+      return;
+    }
+    if (value === null || typeof value !== 'object') return;
+    const obj = value as Record<string, unknown>;
+    const id = typeof obj.sessionId === 'string' ? obj.sessionId : obj.id;
+    if (typeof id === 'string' && typeof obj.cwd === 'string') out.set(id, obj.cwd);
+    for (const nested of Object.values(obj)) collectSessionPathPairs(nested, out);
+  }
+
+  // workspaceId → 规范路径 映射：从 workspace.list 响应里收集，供 session.create/delete 用 workspaceId 时解析路径
   const workspacePathById = new Map<string, string>();
+  const workspaceSessionCountById = new Map<string, number>();
+  const sessionPathById = new Map<string, string>();
+  let workspacePathRefresh: Promise<void> | null = null;
+  let sessionPathRefresh: Promise<void> | null = null;
 
-  /**
-   * 从 Cookie 校验会话；返回用户或 null（用户已不存在时旧 token 立即失效）。
-   * 性能：同一 token 的验签 + 用户存在性查询结果缓存 30 秒——每个代理
-   * 请求（含静态资源）都要走鉴权，缓存后只剩一次 Map 查找，避免逐请求
-   * 重复 JWT 验签 + SQLite 查询 + HMAC/AES。
-   */
-  const sessionCache = new Map<
-    string,
-    { user: { userId: number; username: string }; expireAt: number }
-  >();
-  const SESSION_CACHE_TTL_MS = 30_000;
+  function refreshWorkspacePathMap(): Promise<void> {
+    if (workspacePathRefresh !== null) return workspacePathRefresh;
+    workspacePathRefresh = new Promise<void>((resolve, reject) => {
+      const payload = JSON.stringify({
+        type: 'client-request',
+        rpcId: randomBytes(12).toString('hex'),
+        method: 'workspace.list',
+        payload: {},
+      });
+      const request = http.request({
+        hostname: upstreamHost,
+        port: upstreamPort,
+        path: '/api/workspace.list',
+        method: 'POST',
+        headers: {
+          host: `${upstreamHost}:${upstreamPort}`,
+          origin: `http://${upstreamHost}:${upstreamPort}`,
+          'content-type': 'application/json',
+          'content-length': String(Buffer.byteLength(payload)),
+        },
+        agent: upstreamAgent,
+      }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => {
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+              result?: { ok?: boolean; error?: { message?: string } };
+            };
+            if (response.statusCode !== 200 || body.result?.ok !== true) {
+              reject(new Error(body.result?.error?.message ?? `workspace.list HTTP ${response.statusCode ?? 0}`));
+              return;
+            }
+            workspacePathById.clear();
+            workspaceSessionCountById.clear();
+            collectIdPathPairs(body, workspacePathById);
+            collectWorkspaceSessionCounts(body, workspaceSessionCountById);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+      request.on('error', reject);
+      request.end(payload);
+    }).finally(() => {
+      workspacePathRefresh = null;
+    });
+    return workspacePathRefresh;
+  }
 
-  function sessionOf(req: Request): { userId: number; username: string } | null {
+  function refreshSessionPathMap(): Promise<void> {
+    if (sessionPathRefresh !== null) return sessionPathRefresh;
+    sessionPathRefresh = new Promise<void>((resolve, reject) => {
+      const payload = JSON.stringify({
+        type: 'client-request',
+        rpcId: randomBytes(12).toString('hex'),
+        method: 'session.list',
+        payload: {},
+      });
+      const request = http.request({
+        hostname: upstreamHost,
+        port: upstreamPort,
+        path: '/api/session.list',
+        method: 'POST',
+        headers: {
+          host: `${upstreamHost}:${upstreamPort}`,
+          origin: `http://${upstreamHost}:${upstreamPort}`,
+          'content-type': 'application/json',
+          'content-length': String(Buffer.byteLength(payload)),
+        },
+        agent: upstreamAgent,
+      }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => {
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+              result?: { ok?: boolean; error?: { message?: string } };
+            };
+            if (response.statusCode !== 200 || body.result?.ok !== true) {
+              reject(new Error(body.result?.error?.message ?? `session.list HTTP ${response.statusCode ?? 0}`));
+              return;
+            }
+            sessionPathById.clear();
+            collectSessionPathPairs(body, sessionPathById);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+      request.on('error', reject);
+      request.end(payload);
+    }).finally(() => {
+      sessionPathRefresh = null;
+    });
+    return sessionPathRefresh;
+  }
+
+  /** 从 Cookie 实时校验会话；账号删除、封禁、改名或改密后下一请求立即失效。 */
+  function sessionOf(req: Request): { userId: number; username: string; role: 'admin' | 'user' } | null {
     const token = readCookie(req.headers.cookie, COOKIE_NAME);
     if (!token) return null;
-    const now = Date.now();
-    const hit = sessionCache.get(token);
-    if (hit) {
-      if (hit.expireAt > now) return hit.user;
-      sessionCache.delete(token);
-    }
     try {
-      const user = auth.verifyToken(token);
-      // 用户被删除/重置/改密后旧会话必须失效（缓存有效期 30 秒内生效）
-      const row = db.getUserByUsername(user.username);
-      if (row === null) return null;
-      if (user.cv !== row.credential_version) return null;
-      sessionCache.set(token, { user, expireAt: now + SESSION_CACHE_TTL_MS });
-      return user;
+      return auth.verifyToken(token);
     } catch {
       return null;
     }
@@ -546,18 +703,81 @@ export function createGatewayServer(
         allow_git_download: true,
         banned: false,
         sandbox_mode: null,
+        workspace_mode: 'repair-required',
+        workspace_root: null,
+        remark: '',
         updated_at: '',
       }
     );
   }
 
+  function permissionPathAllowed(perms: UserPermissionsRow, candidate: string): boolean {
+    if (perms.workspace_mode === 'repair-required' || perms.workspace_root === null) return false;
+    if (perms.allowed_folders.length !== 1 || perms.allowed_folders[0] !== perms.workspace_root) return false;
+    return authorizeFilesystemPath(perms.workspace_root, candidate, { allowMissing: true }).allowed;
+  }
+
+  const HOST_FILESYSTEM_ENDPOINT_RE = /^\/api\/host[.\/](listDirectory|createDirectory|openPath)$/;
+  const HOST_LIST_DIRECTORY_RE = /^\/api\/host[.\/]listDirectory$/;
+  const HOST_CREATE_DIRECTORY_RE = /^\/api\/host[.\/]createDirectory$/;
+  const WORKSPACE_LIST_RE = /^\/api\/workspace[.\/]list$/;
+  const WORKSPACE_DELETE_RE = /^\/api\/workspace[.\/]delete$/;
+  const SESSION_CREATE_RE = /^\/api\/session[.\/]create$/;
+  const SESSION_FORK_RE = /^\/api\/session[.\/]fork$/;
+
+  function injectRpcPayloadPath(value: unknown, workspaceRoot: string): unknown {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+    const obj = value as Record<string, unknown>;
+    if (obj.payload !== null && typeof obj.payload === 'object' && !Array.isArray(obj.payload)) {
+      return { ...obj, payload: { ...(obj.payload as Record<string, unknown>), path: workspaceRoot } };
+    }
+    return { ...obj, path: workspaceRoot };
+  }
+
+  function replaceRpcWorkspaceId(value: unknown, workspaceId: string): unknown {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+    const obj = value as Record<string, unknown>;
+    if (obj.payload !== null && typeof obj.payload === 'object' && !Array.isArray(obj.payload)) {
+      return { ...obj, payload: { ...(obj.payload as Record<string, unknown>), workspaceId } };
+    }
+    return { ...obj, workspaceId };
+  }
+
+  function sendRpcDenied(res: Response, body: unknown, code: string, message: string): void {
+    const rpcId = findStringField(body, 'rpcId') ?? 'dsh-passwords-denied';
+    res.status(200).json({
+      type: 'server-response',
+      rpcId,
+      result: { ok: false, error: { code, message } },
+    });
+  }
+
+  function restrictDirectoryListing(value: unknown, perms: UserPermissionsRow): unknown {
+    if (Array.isArray(value)) {
+      return value
+        .filter((item) => {
+          if (item === null || typeof item !== 'object') return true;
+          const candidate = (item as Record<string, unknown>).path;
+          return typeof candidate !== 'string' || permissionPathAllowed(perms, candidate);
+        })
+        .map((item) => restrictDirectoryListing(item, perms));
+    }
+    if (value !== null && typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const [key, nested] of Object.entries(obj)) {
+        out[key] = key === 'home' && perms.workspace_root !== null
+          ? perms.workspace_root
+          : restrictDirectoryListing(nested, perms);
+      }
+      return out;
+    }
+    return value;
+  }
+
   /** 从会话 cookie 解析完整用户（含角色）；无会话/失效返回 null */
   function authedUser(req: Request): { userId: number; username: string; role: 'admin' | 'user' } | null {
-    const s = sessionOf(req);
-    if (!s) return null;
-    const row = db.getUserById(s.userId);
-    if (!row) return null;
-    return { userId: row.id, username: row.username, role: row.role === 'admin' ? 'admin' : 'user' };
+    return sessionOf(req);
   }
 
   /** 统一 403 页面（封禁 / 权限拒绝） */
@@ -578,7 +798,8 @@ export function createGatewayServer(
     return db.getUsage(userId, day);
   }
 
-  // ── 留言 / 聊天（SSE 广播） ────────────────────────────────
+  // ── 长连接与留言 / 聊天（SSE 广播） ───────────────────────
+  const activeConnections = new UserConnectionRegistry();
   const chatClients = new Set<Response>();
   function broadcastMessage(msg: MessageRow): void {
     const payload = `data: ${JSON.stringify(msg)}\n\n`;
@@ -711,8 +932,10 @@ export function createGatewayServer(
   });
 
   // ── 登出 ─────────────────────────────────────────────────────
-  app.get('/gateway/logout', (_req, res) => {
-    res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`);
+  app.get('/gateway/logout', (req, res) => {
+    const token = readCookie(req.headers.cookie, COOKIE_NAME);
+    if (token) auth.revokeToken(token);
+    res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
     res.redirect(302, '/gateway/login');
   });
 
@@ -773,6 +996,167 @@ export function createGatewayServer(
 
   const jsonBody = express.json({ limit: '256kb' });
 
+  // ── 当前账号与退出：独立于 DSH 设置页，所有登录用户可用 ──────
+  app.get('/gateway/api/me', (req, res) => {
+    const me = apiAuth(req, res);
+    if (!me) return;
+    if (me.role === 'admin') {
+      res.json({ ok: true, me: { id: me.userId, username: me.username, role: me.role } });
+      return;
+    }
+    const perms = effectivePermissions(me.userId);
+    res.json({
+      ok: true,
+      me: {
+        id: me.userId,
+        username: me.username,
+        role: me.role,
+        workspaceMode: perms.workspace_mode,
+        workspaceRoot: perms.workspace_root,
+        sandboxMode: perms.sandbox_mode,
+        allowUpload: perms.allow_upload,
+        allowGitDownload: perms.allow_git_download,
+        hourlyTokenLimit: perms.hourly_token_limit,
+        dailyMinutesLimit: perms.daily_minutes_limit,
+      },
+    });
+  });
+
+  app.post('/gateway/api/logout', jsonBody, (req, res) => {
+    const token = readCookie(req.headers.cookie, COOKIE_NAME);
+    if (token) auth.revokeToken(token);
+    res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+    res.json({ ok: true, redirect: '/gateway/login' });
+  });
+
+  // ── Admin 目录浏览：指定工作区时选择服务器上的一个目录 ──
+  app.get('/gateway/api/directories', (req, res) => {
+    const me = apiAuth(req, res, true);
+    if (!me) return;
+    const requested = typeof req.query.path === 'string' && req.query.path.trim() !== ''
+      ? req.query.path.trim()
+      : existsSync(config.workspaceRoot) ? config.workspaceRoot : os.homedir();
+    try {
+      const current = realpathSync.native(requested);
+      if (!statSync(current).isDirectory()) throw new Error('not a directory');
+      const parentCandidate = path.dirname(current);
+      const parent = parentCandidate === current ? null : realpathSync.native(parentCandidate);
+      const entries = readdirSync(current, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+        .map((entry) => {
+          try {
+            const childPath = realpathSync.native(path.join(current, entry.name));
+            return statSync(childPath).isDirectory() ? { name: entry.name, path: childPath } : null;
+          } catch {
+            return null;
+          }
+        })
+        .filter((entry): entry is { name: string; path: string } => entry !== null)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, 500);
+      res.json({ ok: true, current, parent, entries });
+    } catch (error) {
+      res.status(400).json({
+        ok: false, code: 'DIRECTORY_UNREADABLE',
+        error: error instanceof Error ? error.message : '目录不可访问',
+      });
+    }
+  });
+
+  // ── 独立账户中心：创建和删除子用户（仅 Admin） ─────────────
+  app.post('/gateway/api/users', jsonBody, async (req, res) => {
+    const me = apiAuth(req, res, true);
+    if (!me) return;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const username = typeof body.username === 'string' ? body.username : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    const workspaceMode = body.workspaceMode;
+    if (workspaceMode !== 'username' && workspaceMode !== 'specified') {
+      res.status(400).json({ ok: false, code: 'INVALID_WORKSPACE_MODE', error: '必须选择工作区分配方式' });
+      return;
+    }
+    try {
+      const assignment = assignWorkspace({
+        mode: workspaceMode,
+        username,
+        baseRoot: config.workspaceRoot,
+        specifiedRoot: typeof body.workspaceRoot === 'string' ? body.workspaceRoot : null,
+      });
+      await ensureWorkspace(assignment.root);
+      const created = await auth.addSubUser(me, username, password, {
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
+      try {
+        db.setPermissions(created.id, {
+          allowedFolders: [assignment.root],
+          hourlyTokenLimit: nullableInt(body.hourlyTokenLimit),
+          dailyMinutesLimit: nullableInt(body.dailyMinutesLimit),
+          allowUpload: body.allowUpload === true,
+          allowGitDownload: body.allowGitDownload === true,
+          banned: false,
+          sandboxMode:
+            body.sandboxMode === 'read-only' ||
+            body.sandboxMode === 'workspace-write' ||
+            body.sandboxMode === 'danger-full-access'
+              ? body.sandboxMode
+              : 'workspace-write',
+          workspaceMode: assignment.mode,
+          workspaceRoot: assignment.root,
+          remark: typeof body.remark === 'string' ? body.remark.trim().slice(0, 500) : '',
+        });
+      } catch (error) {
+        db.deleteUser(created.id);
+        throw error;
+      }
+      res.status(201).json({
+        ok: true,
+        user: { id: created.id, username: created.username, workspaceMode: assignment.mode, workspaceRoot: assignment.root },
+      });
+    } catch (error) {
+      if (error instanceof AuthError) {
+        res.status(error.status).json({ ok: false, code: error.code, error: error.localize(langOf(req)) });
+        return;
+      }
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_WORKSPACE',
+        error: error instanceof Error ? error.message : '工作区配置失败',
+      });
+    }
+  });
+
+  app.delete('/gateway/api/users/:id', (req, res) => {
+    const me = apiAuth(req, res, true);
+    if (!me) return;
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      res.status(400).json({ ok: false, code: 'INVALID', error: 'userId 无效' });
+      return;
+    }
+    const target = db.getUserById(userId);
+    if (!target) {
+      res.status(404).json({ ok: false, code: 'NO_SUCH_USER', error: '用户不存在' });
+      return;
+    }
+    if (target.role === 'admin' || target.id === me.userId) {
+      res.status(400).json({ ok: false, code: 'CANNOT_REMOVE_ADMIN', error: '不能删除主账号' });
+      return;
+    }
+    void auth.removeUser(me, target.username, { ip: req.ip, userAgent: req.headers['user-agent'] })
+      .then(() => {
+        activeConnections.revoke(target.id, 'account-deleted');
+        res.json({ ok: true });
+      })
+      .catch((error: unknown) => {
+        if (error instanceof AuthError) {
+          res.status(error.status).json({ ok: false, code: error.code, error: error.localize(langOf(req)) });
+          return;
+        }
+        res.status(500).json({ ok: false, code: 'INTERNAL', error: '删除用户失败' });
+      });
+  });
+
   // ── 概览（仅主用户）：所有用户 + 权限 + 当日用量 ─────────────
   app.get('/gateway/api/overview', (req, res) => {
     const me = apiAuth(req, res, true);
@@ -785,6 +1169,10 @@ export function createGatewayServer(
         id: u.id,
         username: u.username,
         role: u.role,
+        remark: perms.remark,
+        lastLoginAt: u.last_login_at,
+        workspaceMode: perms.workspace_mode,
+        workspaceRoot: perms.workspace_root,
         permissions: {
           allowedFolders: perms.allowed_folders,
           hourlyTokenLimit: perms.hourly_token_limit,
@@ -809,7 +1197,7 @@ export function createGatewayServer(
   });
 
   // ── 更新某子用户权限（仅主用户） ─────────────────────────────
-  app.post('/gateway/api/permissions', jsonBody, (req, res) => {
+  app.post('/gateway/api/permissions', jsonBody, async (req, res) => {
     const me = apiAuth(req, res, true);
     if (!me) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -827,39 +1215,64 @@ export function createGatewayServer(
       res.status(400).json({ ok: false, code: 'FORBIDDEN', error: '不能修改主用户权限' });
       return;
     }
-    const allowedFolders = stringArray(body.allowedFolders);
-    const hourlyTokenLimit = nullableInt(body.hourlyTokenLimit);
-    const dailyMinutesLimit = nullableInt(body.dailyMinutesLimit);
-    const allowUpload = body.allowUpload !== false;
-    const allowGitDownload = body.allowGitDownload !== false;
-    const banned = body.banned === true;
-    const rawSandbox = typeof body.sandboxMode === 'string' ? body.sandboxMode : '';
-    const sandboxMode =
-      rawSandbox === 'read-only' || rawSandbox === 'workspace-write' || rawSandbox === 'danger-full-access'
-        ? rawSandbox
-        : null;
-    db.setPermissions(userId, {
-      allowedFolders,
-      hourlyTokenLimit,
-      dailyMinutesLimit,
-      allowUpload,
-      allowGitDownload,
-      banned,
-      sandboxMode,
-    });
-    db.audit('permissions_changed', {
-      username: target.username,
-      detail: JSON.stringify({
-        allowedFolders,
+    const previous = effectivePermissions(userId);
+    const workspaceMode = body.workspaceMode ?? previous.workspace_mode;
+    if (workspaceMode !== 'username' && workspaceMode !== 'specified') {
+      res.status(400).json({ ok: false, code: 'INVALID_WORKSPACE_MODE', error: '必须为子用户分配一个工作区' });
+      return;
+    }
+    try {
+      const requestedFolders = stringArray(body.allowedFolders);
+      const specifiedRoot =
+        typeof body.workspaceRoot === 'string'
+          ? body.workspaceRoot
+          : requestedFolders.length === 1
+            ? requestedFolders[0]
+            : previous.workspace_root;
+      const assignment = assignWorkspace({
+        mode: workspaceMode,
+        username: target.username,
+        baseRoot: config.workspaceRoot,
+        specifiedRoot,
+      });
+      await ensureWorkspace(assignment.root);
+      const hourlyTokenLimit = nullableInt(body.hourlyTokenLimit);
+      const dailyMinutesLimit = nullableInt(body.dailyMinutesLimit);
+      const allowUpload = body.allowUpload !== false;
+      const allowGitDownload = body.allowGitDownload !== false;
+      const banned = body.banned === true;
+      const rawSandbox = typeof body.sandboxMode === 'string' ? body.sandboxMode : '';
+      const sandboxMode =
+        rawSandbox === 'read-only' || rawSandbox === 'workspace-write' || rawSandbox === 'danger-full-access'
+          ? rawSandbox
+          : previous.sandbox_mode ?? 'read-only';
+      const remark = typeof body.remark === 'string' ? body.remark.trim().slice(0, 500) : previous.remark;
+      db.setPermissions(userId, {
+        allowedFolders: [assignment.root],
         hourlyTokenLimit,
         dailyMinutesLimit,
         allowUpload,
         allowGitDownload,
         banned,
         sandboxMode,
-      }),
-    });
-    res.json({ ok: true });
+        workspaceMode: assignment.mode,
+        workspaceRoot: assignment.root,
+        remark,
+      });
+      db.audit('permissions_changed', {
+        username: target.username,
+        detail: JSON.stringify({
+          workspaceMode: assignment.mode, workspaceRoot: assignment.root, hourlyTokenLimit, dailyMinutesLimit,
+          allowUpload, allowGitDownload, banned, sandboxMode, remark,
+        }),
+      });
+      if (!previous.banned && banned) activeConnections.revoke(userId, 'account-banned');
+      res.json({ ok: true, workspaceMode: assignment.mode, workspaceRoot: assignment.root });
+    } catch (error) {
+      res.status(400).json({
+        ok: false, code: 'INVALID_WORKSPACE', error: error instanceof Error ? error.message : '工作区配置失败',
+      });
+    }
   });
 
   // ── token 用量上报（客户端 liveTokenUsage 投影增量，所有登录用户） ──
@@ -926,14 +1339,24 @@ export function createGatewayServer(
     res.flushHeaders();
     res.write(`data: ${JSON.stringify({ type: 'init', me: { id: me.userId, username: me.username, role: me.role } })}\n\n`);
     chatClients.add(res);
-    req.on('close', () => chatClients.delete(res));
+    const untrack = activeConnections.track(me.userId, (reason) => {
+      try {
+        res.write(`event: account-revoked\ndata: ${JSON.stringify({ reason })}\n\n`);
+      } finally {
+        res.end();
+      }
+    });
+    req.on('close', () => {
+      chatClients.delete(res);
+      untrack();
+    });
   });
 
   // ── 认证门卫：非 /gateway 请求必须带有效会话 ─────────────────
   // 路径先用 WHATWG URL 规范化（. / .. / %2e%2e 均被归一），再做前缀判断——
   // 否则 /gateway/../api/xxx 会绕过前缀检查直达上游（dsh 侧 new URL 同样
   // 会归一化该路径，等于未认证调用任意 RPC）。解析失败一律按未认证处理，绝不 500。
-  app.use((req, res, next) => {
+  app.use(async (req, res, next) => {
     try {
       const parsed = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
       if (parsed.pathname.startsWith('/gateway/')) return next();
@@ -952,9 +1375,22 @@ export function createGatewayServer(
       if (row.role !== 'admin') {
         const perms = effectivePermissions(user.userId);
         const lang = langOf(req);
+        const requestDecision = classifyGatewayRequest(req.method, parsed.pathname, 'user');
+        if (!requestDecision.allowed) {
+          res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.settingsDenied')));
+          return;
+        }
         if (perms.banned) {
           res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.banned')));
           return;
+        }
+        if (WORKSPACE_LIST_RE.test(parsed.pathname) && perms.workspace_root !== null) {
+          try {
+            await ensureWorkspace(perms.workspace_root);
+          } catch {
+            res.status(502).type('html').send(forbiddenPage(lang, t(lang, 'gw.workspaceUnavailable')));
+            return;
+          }
         }
         if (!perms.allow_upload && isUploadRequest(req.method, parsed.pathname)) {
           res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.noUpload')));
@@ -968,14 +1404,14 @@ export function createGatewayServer(
           res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.noUpload')));
           return;
         }
-        if (perms.allowed_folders.length > 0 && isWorkspaceWrite(parsed.pathname)) {
+        if (isWorkspaceWrite(parsed.pathname)) {
           res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.workspaceDenied')));
           return;
         }
         // aionui-panel 文件树：GET/HEAD 的 root 在 query 里，直接校验白名单（拦截目录浏览/下载）
-        if (perms.allowed_folders.length > 0 && (req.method === 'GET' || req.method === 'HEAD')) {
+        if ((req.method === 'GET' || req.method === 'HEAD') && isAionuiPanel(parsed.pathname)) {
           const aionuiRoot = aionuiRootFrom(req.method, parsed.pathname, parsed.searchParams, null);
-          if (aionuiRoot !== null && !folderAllowed(aionuiRoot, perms.allowed_folders)) {
+          if (aionuiRoot === null || !permissionPathAllowed(perms, aionuiRoot)) {
             res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.folderDenied')));
             return;
           }
@@ -1011,6 +1447,7 @@ export function createGatewayServer(
   // ── 反向代理（HTTP）→ 上游 dsh ──────────────────────────────
   app.use((req, res) => {
     const headers: Record<string, string | string[] | undefined> = { ...req.headers };
+    markGatewayProxyHeaders(headers);
     // 改写 Host 为上游地址（过 dsh 的 browser-trust fence 第 1 道：Host 检查）
     headers.host = `${upstreamHost}:${upstreamPort}`;
     // 改写 Origin 为上游地址（过第 3 道：Origin 必须与 Host 同 host——
@@ -1073,6 +1510,38 @@ export function createGatewayServer(
           return;
         }
 
+        // ── host.listDirectory 响应：把 Home/面包屑钉在授权根，避免展示或导航到父目录 ──
+        if (
+          reqAs.dshpwPerms !== undefined &&
+          req.method === 'POST' &&
+          HOST_LIST_DIRECTORY_RE.test(parsedUrl.pathname)
+        ) {
+          const chunks: Buffer[] = [];
+          upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          upstreamRes.on('end', () => {
+            try {
+              let body = Buffer.concat(chunks);
+              const enc = String(upstreamRes.headers['content-encoding'] ?? '');
+              if (enc.includes('gzip')) body = zlib.gunzipSync(body);
+              const parsed = JSON.parse(body.toString('utf8'));
+              const restricted = restrictDirectoryListing(parsed, reqAs.dshpwPerms!);
+              const out = Buffer.from(JSON.stringify(restricted), 'utf8');
+              const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
+              delete respHeaders['content-length'];
+              delete respHeaders['content-encoding'];
+              respHeaders['content-length'] = String(out.length);
+              res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
+              res.end(out);
+            } catch {
+              const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
+              res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
+              res.end(Buffer.concat(chunks));
+            }
+          });
+          upstreamRes.on('error', () => res.destroy());
+          return;
+        }
+
         // ── workspace.list 响应：收集 id→path 缓存 + 受限子用户过滤白名单外的工作区 ──
         if (req.method === 'POST' && /^\/api\/workspace[.\/]list$/.test(parsedUrl.pathname)) {
           const chunks: Buffer[] = [];
@@ -1083,10 +1552,13 @@ export function createGatewayServer(
               const enc = String(upstreamRes.headers['content-encoding'] ?? '');
               if (enc.includes('gzip')) body = zlib.gunzipSync(body);
               const parsed = JSON.parse(body.toString('utf8'));
-              // 先缓存全量 id→path（供 session.create 用 workspaceId 时解析路径）
+              // 先缓存全量 workspaceId→path/session count，供 create/delete/session.create 授权。
+              workspacePathById.clear();
+              workspaceSessionCountById.clear();
               collectIdPathPairs(parsed, workspacePathById);
+              collectWorkspaceSessionCounts(parsed, workspaceSessionCountById);
               const restricted =
-                reqAs.dshpwPerms !== undefined && reqAs.dshpwPerms.allowed_folders.length > 0;
+                reqAs.dshpwPerms !== undefined;
               const outBody = restricted
                 ? filterByPathField(parsed, reqAs.dshpwPerms!.allowed_folders, 'path')
                 : parsed;
@@ -1110,7 +1582,6 @@ export function createGatewayServer(
         // ── session.list 响应过滤：受限子用户只看得到白名单内工作区的会话 ──
         if (
           reqAs.dshpwPerms !== undefined &&
-          reqAs.dshpwPerms.allowed_folders.length > 0 &&
           req.method === 'POST' &&
           /^\/api\/session[.\/]list$/.test(parsedUrl.pathname)
         ) {
@@ -1122,6 +1593,8 @@ export function createGatewayServer(
               const enc = String(upstreamRes.headers['content-encoding'] ?? '');
               if (enc.includes('gzip')) body = zlib.gunzipSync(body);
               const parsed = JSON.parse(body.toString('utf8'));
+              sessionPathById.clear();
+              collectSessionPathPairs(parsed, sessionPathById);
               const filtered = filterByPathField(parsed, reqAs.dshpwPerms!.allowed_folders, 'cwd');
               const out = Buffer.from(JSON.stringify(filtered), 'utf8');
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
@@ -1179,9 +1652,10 @@ export function createGatewayServer(
     //   2) 沙盒权限：settings.mutate 试图把 defaultPreset 切到高于授权级别 → 403
     const needsFolderCheck =
       reqAs.dshpwPerms !== undefined &&
-      reqAs.dshpwPerms.allowed_folders.length > 0 &&
       (req.method === 'POST' || req.method === 'PUT') &&
-      (WORKSPACE_ENDPOINT_RE.test(parsedUrl.pathname) || isAionuiPanel(parsedUrl.pathname));
+      (WORKSPACE_ENDPOINT_RE.test(parsedUrl.pathname) ||
+        HOST_FILESYSTEM_ENDPOINT_RE.test(parsedUrl.pathname) ||
+        isAionuiPanel(parsedUrl.pathname));
     const needsSandboxCheck =
       reqAs.dshpwPerms !== undefined &&
       reqAs.dshpwPerms.sandbox_mode !== null &&
@@ -1213,20 +1687,19 @@ export function createGatewayServer(
         if (settled) return;
         size += chunk.length;
         if (size > MAX_BODY) {
-          // 超大 body（不会出现在 session.create / settings.mutate）：不检查，直接透传
           settled = true;
-          upstreamReq.write(Buffer.concat(chunks));
-          upstreamReq.write(chunk);
-          req.pipe(upstreamReq);
+          upstreamReq.destroy();
+          res.status(413).type('html').send(forbiddenPage(langOf(req), t(langOf(req), 'gw.folderDenied')));
           return;
         }
         chunks.push(chunk);
       });
-      req.on('end', () => {
+      req.on('end', async () => {
         if (settled) return;
         settled = true;
         const lang = langOf(req);
         let bodyObj: unknown = null;
+        let bodyRewritten = false;
         try {
           bodyObj = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
         } catch {
@@ -1237,17 +1710,89 @@ export function createGatewayServer(
           let targetPath: string | null = null;
           if (bodyObj !== null) {
             if (isAionuiPanel(parsedUrl.pathname)) {
-              // aionui-panel 文件树：root 是工作区路径，path 是 root 下的相对文件路径
-              targetPath = aionuiRootFrom(req.method, parsedUrl.pathname, parsedUrl.searchParams, bodyObj);
+              const root = aionuiRootFrom(req.method, parsedUrl.pathname, parsedUrl.searchParams, bodyObj);
+              const relativePath = findStringField(bodyObj, 'path');
+              if (root !== null) {
+                targetPath = relativePath !== null && !path.isAbsolute(relativePath)
+                  ? path.resolve(root, relativePath)
+                  : relativePath ?? root;
+              }
+            } else if (HOST_LIST_DIRECTORY_RE.test(parsedUrl.pathname)) {
+              targetPath = extractPathFromBody(bodyObj);
+              if (targetPath === null && reqAs.dshpwPerms!.workspace_root !== null) {
+                targetPath = reqAs.dshpwPerms!.workspace_root;
+                bodyObj = injectRpcPayloadPath(bodyObj, targetPath);
+                bodyRewritten = true;
+              }
+            } else if (HOST_CREATE_DIRECTORY_RE.test(parsedUrl.pathname)) {
+              const parentPath = extractPathFromBody(bodyObj);
+              const name = findStringField(bodyObj, 'name');
+              targetPath = parentPath !== null && name !== null ? path.resolve(parentPath, name) : null;
+              const assignedRank =
+                SANDBOX_RANK[reqAs.dshpwPerms!.sandbox_mode as keyof typeof SANDBOX_RANK] ?? 0;
+              if (assignedRank < SANDBOX_RANK['workspace-write']) {
+                upstreamReq.destroy();
+                res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.sandboxDenied')));
+                return;
+              }
             } else {
               targetPath = extractPathFromBody(bodyObj);
               if (targetPath === null) {
                 const wid = extractWorkspaceId(bodyObj);
-                if (wid !== null) targetPath = workspacePathById.get(wid) ?? null;
+                if (wid !== null) {
+                  targetPath = workspacePathById.get(wid) ?? null;
+                  if (targetPath === null) {
+                    await refreshWorkspacePathMap().catch(() => undefined);
+                    targetPath = workspacePathById.get(wid) ?? null;
+                  }
+                  if (
+                    targetPath === null &&
+                    SESSION_CREATE_RE.test(parsedUrl.pathname) &&
+                    reqAs.dshpwPerms!.workspace_root !== null
+                  ) {
+                    await ensureWorkspace(reqAs.dshpwPerms!.workspace_root).catch(() => undefined);
+                    await refreshWorkspacePathMap().catch(() => undefined);
+                    const rootEntry = [...workspacePathById.entries()]
+                      .find(([, workspacePath]) => workspacePath === reqAs.dshpwPerms!.workspace_root);
+                    if (rootEntry !== undefined) {
+                      targetPath = rootEntry[1];
+                      bodyObj = replaceRpcWorkspaceId(bodyObj, rootEntry[0]);
+                      bodyRewritten = true;
+                    }
+                  }
+                }
+              }
+              if (targetPath === null && SESSION_FORK_RE.test(parsedUrl.pathname)) {
+                const sessionId = findStringField(bodyObj, 'sessionId');
+                if (sessionId !== null) {
+                  targetPath = sessionPathById.get(sessionId) ?? null;
+                  if (targetPath === null) {
+                    await refreshSessionPathMap().catch(() => undefined);
+                    targetPath = sessionPathById.get(sessionId) ?? null;
+                  }
+                }
               }
             }
           }
-          if (targetPath !== null && !folderAllowed(targetPath, reqAs.dshpwPerms!.allowed_folders)) {
+          if (
+            WORKSPACE_DELETE_RE.test(parsedUrl.pathname) &&
+            targetPath !== null &&
+            targetPath === reqAs.dshpwPerms!.workspace_root
+          ) {
+            upstreamReq.destroy();
+            sendRpcDenied(res, bodyObj, 'workspace-root-required', t(lang, 'gw.workspaceRootRequired'));
+            return;
+          }
+          if (WORKSPACE_DELETE_RE.test(parsedUrl.pathname)) {
+            const workspaceId = extractWorkspaceId(bodyObj);
+            if (workspaceId !== null && (workspaceSessionCountById.get(workspaceId) ?? 0) > 0) {
+              upstreamReq.destroy();
+              sendRpcDenied(res, bodyObj, 'workspace-not-empty', t(lang, 'gw.workspaceNotEmpty'));
+              return;
+            }
+          }
+          if (targetPath === null || !permissionPathAllowed(reqAs.dshpwPerms!, targetPath)) {
+            upstreamReq.destroy();
             res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.folderDenied')));
             return;
           }
@@ -1279,7 +1824,9 @@ export function createGatewayServer(
         }
 
         // 审批响应改写：受限子用户的 AI 提权审批一律强制 rejected（返回取消）
-        let forwardBody = Buffer.concat(chunks);
+        let forwardBody = bodyRewritten
+          ? Buffer.from(JSON.stringify(bodyObj), 'utf8')
+          : Buffer.concat(chunks);
         if (needsApprovalCheck && bodyObj !== null && typeof bodyObj === 'object') {
           if (forceRejectApproval(bodyObj)) {
             forwardBody = Buffer.from(JSON.stringify(bodyObj), 'utf8');
@@ -1340,25 +1887,27 @@ export function createGatewayServer(
     }
     // 认证检查（复用 Cookie）
     const token = readCookie(req.headers.cookie, COOKIE_NAME);
-    let authed = false;
+    let user: { userId: number; username: string; role: 'admin' | 'user' } | null = null;
     if (token) {
       try {
-        const user = auth.verifyToken(token);
-        if (db.getUserByUsername(user.username) !== null) {
-          authed = true;
-        }
+        user = auth.verifyToken(token);
       } catch {
-        authed = false;
+        user = null;
       }
     }
-    if (!authed) {
+    if (!user) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
     }
 
     // 转发升级请求（Host/Origin 改写，同 HTTP 路径；路径已规范化）
-    const upstreamSocket = net.connect(upstreamPort, upstreamHost, () => {
+    let upstreamSocket: net.Socket | null = null;
+    const untrack = activeConnections.track(user.userId, () => {
+      socket.destroy();
+      upstreamSocket?.destroy();
+    });
+    const connectedSocket = net.connect(upstreamPort, upstreamHost, () => {
       const lines: string[] = [
         `${req.method ?? 'GET'} ${url.pathname + url.search} HTTP/1.1`,
       ];
@@ -1372,15 +1921,16 @@ export function createGatewayServer(
         }
       }
       lines.push('', '');
-      upstreamSocket.write(lines.join('\r\n'));
-      if (head && head.length > 0) upstreamSocket.write(head);
-      socket.pipe(upstreamSocket);
-      upstreamSocket.pipe(socket);
+      connectedSocket.write(lines.join('\r\n'));
+      if (head && head.length > 0) connectedSocket.write(head);
+      socket.pipe(connectedSocket);
+      connectedSocket.pipe(socket);
     });
-    upstreamSocket.on('error', () => socket.destroy());
-    socket.on('error', () => upstreamSocket.destroy());
-    socket.on('close', () => upstreamSocket.destroy());
-    upstreamSocket.on('close', () => socket.destroy());
+    upstreamSocket = connectedSocket;
+    connectedSocket.on('error', () => socket.destroy());
+    socket.on('error', () => upstreamSocket?.destroy());
+    socket.on('close', () => { untrack(); upstreamSocket?.destroy(); });
+    connectedSocket.on('close', () => { untrack(); socket.destroy(); });
   });
 
   return server;

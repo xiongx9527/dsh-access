@@ -48,6 +48,8 @@ export interface AuditLogRow {
 }
 
 /** 子用户权限（对应 user_permissions 表；缺行 = 默认全量权限） */
+export type WorkspaceMode = 'username' | 'specified' | 'repair-required';
+
 export interface UserPermissionsRow {
   user_id: number;
   allowed_folders: string[];
@@ -57,6 +59,9 @@ export interface UserPermissionsRow {
   allow_git_download: boolean;
   banned: boolean;
   sandbox_mode: string | null;
+  workspace_mode: WorkspaceMode;
+  workspace_root: string | null;
+  remark: string;
   updated_at: string;
 }
 
@@ -125,6 +130,9 @@ CREATE TABLE IF NOT EXISTS user_permissions (
   allow_git_download INTEGER NOT NULL DEFAULT 1,
   banned             INTEGER NOT NULL DEFAULT 0,
   sandbox_mode       TEXT,                          -- NULL = 不更改；read-only/workspace-write/danger-full-access
+  workspace_mode     TEXT,                          -- username/specified/repair-required
+  workspace_root     TEXT,                          -- 唯一规范化工作区根目录
+  remark             TEXT NOT NULL DEFAULT '',      -- 仅管理员可见备注
   updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS user_usage (
@@ -221,11 +229,38 @@ export class Database {
     }
   }
 
-  // ── 迁移：user_permissions 补 sandbox_mode 列 ─────────────────
+  // ── 迁移：user_permissions 补齐沙盒、单工作区和备注字段 ──────
   private migratePermissions(): void {
     const cols = this.stmt('PRAGMA table_info(user_permissions)').all() as { name: string }[];
     if (!cols.some((c) => c.name === 'sandbox_mode')) {
       this.db.exec('ALTER TABLE user_permissions ADD COLUMN sandbox_mode TEXT');
+    }
+    if (!cols.some((c) => c.name === 'workspace_mode')) {
+      this.db.exec('ALTER TABLE user_permissions ADD COLUMN workspace_mode TEXT');
+    }
+    if (!cols.some((c) => c.name === 'workspace_root')) {
+      this.db.exec('ALTER TABLE user_permissions ADD COLUMN workspace_root TEXT');
+    }
+    if (!cols.some((c) => c.name === 'remark')) {
+      this.db.exec("ALTER TABLE user_permissions ADD COLUMN remark TEXT NOT NULL DEFAULT ''");
+    }
+
+    const rows = this.stmt(
+      'SELECT user_id, allowed_folders, workspace_mode, workspace_root FROM user_permissions',
+    ).all() as Array<{ user_id: number; allowed_folders: string | null; workspace_mode: string | null; workspace_root: string | null }>;
+    const migrate = this.stmt(
+      'UPDATE user_permissions SET workspace_mode = ?, workspace_root = ?, allowed_folders = ? WHERE user_id = ?',
+    );
+    for (const row of rows) {
+      if (row.workspace_mode === 'username' || row.workspace_mode === 'specified' || row.workspace_mode === 'repair-required') {
+        continue;
+      }
+      const folders = parseJsonArray(row.allowed_folders).filter((entry) => entry.trim() !== '');
+      if (folders.length === 1) {
+        migrate.run('specified', folders[0], JSON.stringify([folders[0]]), row.user_id);
+      } else {
+        migrate.run('repair-required', null, JSON.stringify([]), row.user_id);
+      }
     }
   }
 
@@ -409,11 +444,9 @@ export class Database {
 
   /** 改名（用户名密文 + 等值索引一起更新） */
   updateUsername(id: number, username: string): void {
-    this.stmt('UPDATE users SET username = ?, username_hash = ? WHERE id = ?').run(
-      this.crypto.encrypt(username),
-      this.crypto.lookupHash(username),
-      id,
-    );
+    this.stmt(
+      'UPDATE users SET username = ?, username_hash = ?, credential_version = credential_version + 1 WHERE id = ?',
+    ).run(this.crypto.encrypt(username), this.crypto.lookupHash(username), id);
   }
 
   /** 改密：credential_version +1，旧会话（签入时版本号）立即失效 */
@@ -521,7 +554,7 @@ export class Database {
   // ── 子用户权限（网关强制执行） ────────────────────────────
   getPermissions(userId: number): UserPermissionsRow | null {
     const row = this.stmt(
-      'SELECT user_id, allowed_folders, hourly_token_limit, daily_minutes_limit, allow_upload, allow_git_download, banned, sandbox_mode, updated_at FROM user_permissions WHERE user_id = ?',
+      'SELECT user_id, allowed_folders, hourly_token_limit, daily_minutes_limit, allow_upload, allow_git_download, banned, sandbox_mode, workspace_mode, workspace_root, remark, updated_at FROM user_permissions WHERE user_id = ?',
     ).get(userId) as
       | {
           user_id: number;
@@ -532,6 +565,9 @@ export class Database {
           allow_git_download: number;
           banned: number;
           sandbox_mode: string | null;
+          workspace_mode: string | null;
+          workspace_root: string | null;
+          remark: string | null;
           updated_at: string;
         }
       | undefined;
@@ -545,6 +581,12 @@ export class Database {
       allow_git_download: row.allow_git_download === 1,
       banned: row.banned === 1,
       sandbox_mode: row.sandbox_mode,
+      workspace_mode:
+        row.workspace_mode === 'username' || row.workspace_mode === 'specified'
+          ? row.workspace_mode
+          : 'repair-required',
+      workspace_root: row.workspace_root,
+      remark: row.remark ?? '',
       updated_at: row.updated_at,
     };
   }
@@ -559,11 +601,15 @@ export class Database {
       allowGitDownload: boolean;
       banned: boolean;
       sandboxMode: string | null;
+      workspaceMode?: WorkspaceMode;
+      workspaceRoot?: string | null;
+      remark?: string;
     },
   ): void {
+    const previous = this.getPermissions(userId);
     this.stmt(
-      `INSERT INTO user_permissions (user_id, allowed_folders, hourly_token_limit, daily_minutes_limit, allow_upload, allow_git_download, banned, sandbox_mode)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO user_permissions (user_id, allowed_folders, hourly_token_limit, daily_minutes_limit, allow_upload, allow_git_download, banned, sandbox_mode, workspace_mode, workspace_root, remark)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
          allowed_folders = excluded.allowed_folders,
          hourly_token_limit = excluded.hourly_token_limit,
@@ -572,6 +618,9 @@ export class Database {
          allow_git_download = excluded.allow_git_download,
          banned = excluded.banned,
          sandbox_mode = excluded.sandbox_mode,
+         workspace_mode = excluded.workspace_mode,
+         workspace_root = excluded.workspace_root,
+         remark = excluded.remark,
          updated_at = datetime('now')`,
     ).run(
       userId,
@@ -582,7 +631,13 @@ export class Database {
       perms.allowGitDownload ? 1 : 0,
       perms.banned ? 1 : 0,
       perms.sandboxMode,
+      perms.workspaceMode ?? (perms.allowedFolders.length === 1 ? 'specified' : 'repair-required'),
+      perms.workspaceRoot ?? (perms.allowedFolders.length === 1 ? perms.allowedFolders[0] : null),
+      perms.remark ?? '',
     );
+    if (previous !== null && previous.banned !== perms.banned) {
+      this.stmt('UPDATE users SET credential_version = credential_version + 1 WHERE id = ?').run(userId);
+    }
   }
 
   // ── 用户用量（时间 / token 配额） ─────────────────────────

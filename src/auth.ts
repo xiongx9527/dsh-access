@@ -8,8 +8,9 @@
 // （网关页面按页面语言、dsh 设置卡片按 dsh 语言本地化）。
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { createHash } from 'node:crypto';
 import type { PlatformConfig } from './config.js';
-import { Database } from './db.js';
+import { Database, type UserRow } from './db.js';
 import { t, type Lang } from './i18n.js';
 
 const BCRYPT_ROUNDS = 10;
@@ -82,6 +83,8 @@ export interface AuthedUser {
 }
 
 export class AuthService {
+  private readonly revokedTokens = new Map<string, number>();
+
   constructor(
     private config: PlatformConfig,
     private db: Database,
@@ -180,6 +183,15 @@ export class AuthService {
       throw new AuthError('INVALID_CREDENTIALS', {}, 401);
     }
 
+    if (user.role !== 'admin' && this.db.getPermissions(user.id)?.banned === true) {
+      await this.db.audit('banned_login_blocked', {
+        username,
+        ip,
+        userAgent: meta.userAgent,
+      });
+      throw new AuthError('ACCOUNT_BANNED', {}, 403);
+    }
+
     // 3) 成功：清除失败计数 + 记录审计
     await this.db.resetLoginAttempts(username, ip);
     await this.db.touchLogin(user.id);
@@ -193,14 +205,44 @@ export class AuthService {
     return { token, username: user.username };
   }
 
-  /** 校验 JWT（Web 中间件用）；cv 为签入时的凭据版本，改密后旧 token 失效 */
-  verifyToken(token: string): { userId: number; username: string; cv: number } {
+  /**
+   * 校验 JWT 并实时确认账号仍存在、未封禁且凭据版本一致。
+   * 任何请求和新建实时连接都必须走这里，不能只依赖 token 有效期。
+   */
+  verifyToken(token: string): { userId: number; username: string; role: 'admin' | 'user'; cv: number } {
     try {
+      const tokenHash = createHash('sha256').update(token).digest('base64url');
+      const revokedUntil = this.revokedTokens.get(tokenHash);
+      if (revokedUntil !== undefined) {
+        if (revokedUntil > Date.now()) throw new Error('revoked session');
+        this.revokedTokens.delete(tokenHash);
+      }
       const payload = jwt.verify(token, this.config.jwtSecret) as jwt.JwtPayload;
+      const userId = Number(payload.sub);
       const cv = typeof payload.cv === 'number' ? payload.cv : 0;
-      return { userId: Number(payload.sub), username: String(payload.username), cv };
-    } catch {
+      if (!Number.isInteger(userId) || userId <= 0) throw new Error('invalid subject');
+      const row = this.db.getUserById(userId);
+      if (row === null || row.credential_version !== cv || row.username !== String(payload.username)) {
+        throw new Error('stale session');
+      }
+      if (row.role !== 'admin' && this.db.getPermissions(row.id)?.banned === true) {
+        throw new AuthError('ACCOUNT_BANNED', {}, 403);
+      }
+      return { userId: row.id, username: row.username, role: row.role, cv };
+    } catch (error) {
+      if (error instanceof AuthError) throw error;
       throw new AuthError('INVALID_TOKEN', {}, 401);
+    }
+  }
+
+  /** 仅撤销当前 JWT；用于显式退出，不影响同账号其他已登录设备。 */
+  revokeToken(token: string): void {
+    try {
+      const payload = jwt.decode(token) as jwt.JwtPayload | null;
+      const expiresAt = typeof payload?.exp === 'number' ? payload.exp * 1000 : Date.now() + 12 * 60 * 60 * 1000;
+      this.revokedTokens.set(createHash('sha256').update(token).digest('base64url'), expiresAt);
+    } catch {
+      // 无效 token 无需记录；调用方仍会清理 Cookie。
     }
   }
 
@@ -277,7 +319,7 @@ export class AuthService {
     username: string,
     password: string,
     meta: RequestMeta = {},
-  ): Promise<void> {
+  ): Promise<UserRow> {
     if (caller.role !== 'admin') throw new AuthError('FORBIDDEN_ADD_USER', {}, 403);
     const name = assertUsername(username);
     assertNoSqlInjection(name, 'username');
@@ -286,13 +328,14 @@ export class AuthService {
     }
     const pw = assertPassword(password);
     const hash = await bcrypt.hash(pw, BCRYPT_ROUNDS);
-    await this.db.createUser(name, hash, 'user');
+    const created = await this.db.createUser(name, hash, 'user');
     await this.db.audit('subuser_created', {
       username: name,
       ip: meta.ip,
       userAgent: meta.userAgent,
       detail: `由主用户 ${caller.username} 创建`,
     });
+    return created;
   }
 
   /** 删除子用户（仅主用户；不能删除自己） */

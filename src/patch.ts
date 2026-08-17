@@ -13,7 +13,7 @@
 // 仍会被主机侧栅栏拒绝）。无论本地直连还是远程，强制打此补丁影响都不大，
 // 因此不提供开关：网关每次启动自动应用（幂等），dsh 升级覆盖文件后重启
 // 网关自动重打，或在设置页点"重载补丁"。
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, realpathSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -26,6 +26,10 @@ const SETTINGS_TARGET = path.join(
 /** 主机侧 settings 白名单文件（补插件命名空间） */
 const WHITELIST_TARGET = path.join(
   'node_modules', '@deepseek-ai', 'dsh-host-apiproxy', 'lib', 'index.js',
+);
+/** Workspace session rows: let blank New Session rows expose Archive. */
+const WORKSPACE_CLIENT_TARGET = path.join(
+  'node_modules', '@deepseek-ai', 'dsh-client-ui-workspace', 'lib', 'client.js',
 );
 
 const SETTINGS_FROM = 'connection.isLoopback ? "host" : "memory"';
@@ -49,21 +53,49 @@ const WL_NAMESPACES = [
   'dsh-passwords',
 ];
 
-/** 找到 dsh 安装根目录（@deepseek-ai/dsh），找不到返回 null */
-export function findDshRoot(explicit: string): string | null {
-  if (explicit) return existsSync(explicit) ? explicit : null;
+function hasPatchTargets(installRoot: string): boolean {
+  return (
+    existsSync(path.join(installRoot, SETTINGS_TARGET)) &&
+    existsSync(path.join(installRoot, WHITELIST_TARGET))
+  );
+}
+
+/** Resolve either an install prefix, package root, node_modules directory or executable to the shared install prefix. */
+function installationRootFrom(start: string): string | null {
+  if (!start || !existsSync(start)) return null;
+  let current: string;
+  try {
+    current = realpathSync(start);
+    if (statSync(current).isFile()) current = path.dirname(current);
+  } catch {
+    return null;
+  }
+  for (;;) {
+    if (hasPatchTargets(current)) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+/** 找到承载 DSH 及其 hoisted 依赖的安装前缀，找不到返回 null。 */
+export function findDshRoot(explicit: string, entrypoint = process.argv[1] ?? ''): string | null {
+  if (explicit) return installationRootFrom(explicit);
+
+  const running = installationRootFrom(entrypoint);
+  if (running) return running;
+
   try {
     const globalRoot = execSync('npm root -g', { encoding: 'utf8' }).trim();
-    const candidate = path.join(globalRoot, '@deepseek-ai', 'dsh');
-    if (existsSync(candidate)) return candidate;
+    const globalInstall = installationRootFrom(globalRoot);
+    if (globalInstall) return globalInstall;
   } catch {
     // npm 不可用时走兜底路径
   }
-  for (const candidate of [
-    '/usr/local/lib/node_modules/@deepseek-ai/dsh',
-    '/usr/lib/node_modules/@deepseek-ai/dsh',
-  ]) {
-    if (existsSync(candidate)) return candidate;
+
+  for (const candidate of ['/opt/homebrew/lib', '/usr/local/lib', '/usr/lib']) {
+    const install = installationRootFrom(candidate);
+    if (install) return install;
   }
   return null;
 }
@@ -110,6 +142,26 @@ export function applyRemotePatch(dshRoot: string): 'applied' | 'unchanged' | 'mi
     if (!existsSync(wlFile + BAK_SUFFIX)) writeFileSync(wlFile + BAK_SUFFIX, w);
     writeFileSync(wlFile, w.replace(re, block));
     changed = true;
+  }
+
+  // 3) 空白 New Session 也显示操作菜单，但只提供归档，避免先发一条消息才能清理。
+  const workspaceClientFile = path.join(dshRoot, WORKSPACE_CLIENT_TARGET);
+  if (existsSync(workspaceClientFile)) {
+    const source = readFileSync(workspaceClientFile, 'utf8');
+    const archiveItems = 'items: row.blank ? sessionMenuItems.filter((item) => item.id === "archive") : sessionMenuItems,';
+    if (!source.includes(archiveItems)) {
+      const actionGuard = /!row\.blank && \(0, react_jsx_runtime\.jsx\)\("span", \{(\s*className: Rows_module_css_default\.rowActions,)/;
+      if (actionGuard.test(source) && source.includes('items: sessionMenuItems,')) {
+        if (!existsSync(workspaceClientFile + BAK_SUFFIX)) {
+          writeFileSync(workspaceClientFile + BAK_SUFFIX, source);
+        }
+        const patched = source
+          .replace(actionGuard, '(0, react_jsx_runtime.jsx)("span", {$1')
+          .replace('items: sessionMenuItems,', archiveItems);
+        writeFileSync(workspaceClientFile, patched);
+        changed = true;
+      }
+    }
   }
 
   return changed ? 'applied' : 'unchanged';
