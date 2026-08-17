@@ -167,6 +167,25 @@ export function applyRemotePatch(dshRoot: string): 'applied' | 'unchanged' | 'mi
   return changed ? 'applied' : 'unchanged';
 }
 
+/**
+ * 回滚补丁：从 .bak-dshpw 备份恢复两个目标文件。
+ * 备份不存在（从未打过补丁）时返回 'no-backup'。
+ */
+export function rollbackPatch(dshRoot: string): 'rolled-back' | 'no-backup' | 'missing' {
+  const settingsFile = path.join(dshRoot, SETTINGS_TARGET);
+  const wlFile = path.join(dshRoot, WHITELIST_TARGET);
+  if (!existsSync(settingsFile) || !existsSync(wlFile)) return 'missing';
+  let changed = false;
+  for (const target of [settingsFile, wlFile]) {
+    const bak = target + BAK_SUFFIX;
+    if (existsSync(bak)) {
+      writeFileSync(target, readFileSync(bak));
+      changed = true;
+    }
+  }
+  return changed ? 'rolled-back' : 'no-backup';
+}
+
 /** 延迟重启 dsh 网页服务（补丁生效需要 dsh 重新加载模块）；仅适用于常驻进程 */
 export function restartDshWeb(service: string, delayMs = 2500): void {
   if (!service) return;

@@ -121,13 +121,20 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(username_hash, ip_hash)
 );
+CREATE TABLE IF NOT EXISTS ip_throttle (
+  ip_hash        TEXT PRIMARY KEY,
+  failed_count   INTEGER NOT NULL DEFAULT 0,
+  window_started TEXT NOT NULL DEFAULT (datetime('now')),
+  throttled_until TEXT,
+  updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS user_permissions (
   user_id            INTEGER PRIMARY KEY,
   allowed_folders    TEXT,                          -- JSON 字符串数组（绝对路径）
   hourly_token_limit INTEGER,                       -- NULL = 不限
   daily_minutes_limit INTEGER,                      -- NULL = 不限
   allow_upload       INTEGER NOT NULL DEFAULT 1,
-  allow_git_download INTEGER NOT NULL DEFAULT 1,
+  allow_git_download INTEGER NOT NULL DEFAULT 0,
   banned             INTEGER NOT NULL DEFAULT 0,
   sandbox_mode       TEXT,                          -- NULL = 不更改；read-only/workspace-write/danger-full-access
   workspace_mode     TEXT,                          -- username/specified/repair-required
@@ -282,8 +289,21 @@ export class Database {
     const upd = this.stmt('UPDATE users SET username = ?, username_hash = ? WHERE id = ?');
     let changed = false;
     for (const row of rows) {
-      const plain = row.username.startsWith('v1:') ? this.crypto.decrypt(row.username) : row.username;
-      if (!row.username.startsWith('v1:') || !row.username_hash) {
+      const isCipher = row.username.startsWith('v1:');
+      let plain: string | null = null;
+      if (isCipher) {
+        const decrypted = this.crypto.decrypt(row.username);
+        // 解密失败返回 '⟨无法解密⟩' 占位符：跳过该行并告警，
+        // 绝不能把占位符当明文加密写回（否则原始密文被覆盖，数据永久丢失）
+        if (decrypted === '⟨无法解密⟩') {
+          console.error(`[dsh-passwords] 迁移跳过用户 id=${row.id}：username 解密失败（密钥不匹配或数据损坏）`);
+          continue;
+        }
+        plain = decrypted;
+      } else {
+        plain = row.username;
+      }
+      if (!isCipher || !row.username_hash) {
         this.db.exec('BEGIN');
         try {
           upd.run(this.crypto.encrypt(plain!), this.crypto.lookupHash(plain!), row.id);
@@ -312,17 +332,15 @@ export class Database {
     );
     let changed = false;
     for (const row of rows) {
-      const needs = (v: string | null) => v !== null && !v.startsWith('v1:');
-      if (needs(row.username) || needs(row.ip) || needs(row.user_agent) || needs(row.detail)) {
+      const encIfNeeded = (v: string | null) => (v !== null && !v.startsWith('v1:') ? this.crypto.encrypt(v) : v);
+      const username = encIfNeeded(row.username);
+      const ip = encIfNeeded(row.ip);
+      const userAgent = encIfNeeded(row.user_agent);
+      const detail = encIfNeeded(row.detail);
+      if (username !== row.username || ip !== row.ip || userAgent !== row.user_agent || detail !== row.detail) {
         this.db.exec('BEGIN');
         try {
-          upd.run(
-            this.crypto.encrypt(row.username),
-            this.crypto.encrypt(row.ip),
-            this.crypto.encrypt(row.user_agent),
-            this.crypto.encrypt(row.detail),
-            row.id,
-          );
+          upd.run(username, ip, userAgent, detail, row.id);
           this.db.exec('COMMIT');
           changed = true;
         } catch (error) {
@@ -408,11 +426,49 @@ export class Database {
     return { ...row, username: this.crypto.decrypt(row.username) ?? '' };
   }
 
+  /**
+   * 单用户的安全投影（不含 password_hash / credential_version），
+   * 供外部接口返回“自己”行时使用（F-10：state 接口不得泄露 bcrypt 哈希）。
+   */
+  getUserListRowById(id: number): UserListRow | null {
+    const row = this.stmt(
+      'SELECT id, username, role, created_at, last_login_at FROM users WHERE id = ?',
+    ).get(id) as (Omit<UserListRow, 'username'> & { username: string }) | undefined;
+    if (!row) return null;
+    return {
+      id: row.id,
+      username: this.crypto.decrypt(row.username) ?? '',
+      role: row.role === 'admin' ? 'admin' : 'user',
+      created_at: row.created_at,
+      last_login_at: row.last_login_at,
+    };
+  }
+
   /** 用户列表（用户名已解密），按创建顺序 */
   listUsers(): UserListRow[] {
     const rows = this.stmt(
       'SELECT id, username, role, created_at, last_login_at FROM users ORDER BY id ASC',
     ).all() as (Omit<UserListRow, 'username'> & { username: string })[];
+    return rows.map((row) => ({
+      id: row.id,
+      username: this.crypto.decrypt(row.username) ?? '',
+      role: row.role === 'admin' ? 'admin' : 'user',
+      created_at: row.created_at,
+      last_login_at: row.last_login_at,
+    }));
+  }
+
+  /**
+   * 与某用户有消息往来的其他用户（F-05：子用户的 state 接口只暴露这些人，
+   * 避免全量用户目录泄露给低权限账号）。含主动/被动双向：我是发件人或收件人。
+   */
+  listMessageContacts(userId: number): UserListRow[] {
+    const rows = this.stmt(
+      `SELECT DISTINCT u.id, u.username, u.role, u.created_at, u.last_login_at
+       FROM messages m
+       JOIN users u ON u.id = m.sender_id OR u.id = m.recipient_id
+       WHERE (m.sender_id = ? OR m.recipient_id = ?) AND u.id != ?`,
+    ).all(userId, userId, userId) as (Omit<UserListRow, 'username'> & { username: string })[];
     return rows.map((row) => ({
       id: row.id,
       username: this.crypto.decrypt(row.username) ?? '',
@@ -442,7 +498,7 @@ export class Database {
     };
   }
 
-  /** 改名（用户名密文 + 等值索引一起更新） */
+  /** 改名（用户名密文 + 等值索引一起更新；同时 bump credential_version 使旧会话全部失效） */
   updateUsername(id: number, username: string): void {
     this.stmt(
       'UPDATE users SET username = ?, username_hash = ?, credential_version = credential_version + 1 WHERE id = ?',
@@ -537,6 +593,22 @@ export class Database {
     return this.getLoginAttempt(username, ip)?.failed_count ?? 1;
   }
 
+  /** 该用户名在所有 IP 上的总失败次数（防分布式爆破：轮换 IP 绕过单 (user,ip) 锁定） */
+  countFailuresByUsername(username: string): number {
+    const row = this.stmt(
+      'SELECT COALESCE(SUM(failed_count), 0) AS n FROM login_attempts WHERE username_hash = ?',
+    ).get(this.crypto.lookupHash(username)) as { n: number } | undefined;
+    return Number(row?.n ?? 0);
+  }
+
+  /** 锁定该用户名在所有 IP 上的失败记录（分布式爆破兜底） */
+  lockAllAttemptsByUsername(username: string, until: Date): void {
+    this.stmt('UPDATE login_attempts SET locked_until = ? WHERE username_hash = ?').run(
+      until.toISOString(),
+      this.crypto.lookupHash(username),
+    );
+  }
+
   lockLoginAttempt(username: string, ip: string, until: Date): void {
     this.stmt(
       `INSERT INTO login_attempts (username_hash, ip_hash, failed_count, locked_until) VALUES (?, ?, 0, ?)
@@ -549,6 +621,62 @@ export class Database {
       this.crypto.lookupHash(username),
       this.crypto.lookupHash(ip),
     );
+  }
+
+  // ── 网络安全审查：IP 级节流（防密码喷洒：单 IP 轮换多用户名） ─────
+  getIpThrottle(ip: string): { failed_count: number; window_started: Date; throttled_until: Date | null } | null {
+    const row = this.stmt(
+      'SELECT failed_count, window_started, throttled_until FROM ip_throttle WHERE ip_hash = ?',
+    ).get(this.crypto.lookupHash(ip)) as
+      | { failed_count: number; window_started: string; throttled_until: string | null }
+      | undefined;
+    return row
+      ? {
+          failed_count: Number(row.failed_count),
+          window_started: new Date(row.window_started),
+          throttled_until: row.throttled_until ? new Date(row.throttled_until) : null,
+        }
+      : null;
+  }
+
+  /**
+   * 记录该 IP 的一次登录失败（跨用户名累计）。窗口过期或上次节流已到期时
+   * 重置计数，避免被误伤用户“试一次又续 30 分钟”。返回窗口内累计失败数。
+   */
+  recordIpFailure(ip: string, windowMs: number): number {
+    const now = new Date();
+    const hash = this.crypto.lookupHash(ip);
+    const existing = this.getIpThrottle(ip);
+    if (!existing) {
+      this.stmt('INSERT INTO ip_throttle (ip_hash, failed_count, window_started) VALUES (?, 1, ?)').run(
+        hash,
+        now.toISOString(),
+      );
+      return 1;
+    }
+    const windowExpired = now.getTime() - existing.window_started.getTime() > windowMs;
+    const throttleExpired = existing.throttled_until !== null && existing.throttled_until.getTime() <= now.getTime();
+    if (windowExpired || throttleExpired) {
+      this.stmt(
+        'UPDATE ip_throttle SET failed_count = 1, window_started = ?, throttled_until = NULL WHERE ip_hash = ?',
+      ).run(now.toISOString(), hash);
+      return 1;
+    }
+    this.stmt('UPDATE ip_throttle SET failed_count = failed_count + 1 WHERE ip_hash = ?').run(hash);
+    return existing.failed_count + 1;
+  }
+
+  /** 节流该 IP：窗口内失败达阈值后设置过期时间（期间拒绝一切登录尝试） */
+  throttleIp(ip: string, until: Date): void {
+    this.stmt('UPDATE ip_throttle SET throttled_until = ?, updated_at = datetime(\'now\') WHERE ip_hash = ?').run(
+      until.toISOString(),
+      this.crypto.lookupHash(ip),
+    );
+  }
+
+  /** 登录成功后清除该 IP 的节流记录（正常用户不再受限） */
+  resetIpThrottle(ip: string): void {
+    this.stmt('DELETE FROM ip_throttle WHERE ip_hash = ?').run(this.crypto.lookupHash(ip));
   }
 
   // ── 子用户权限（网关强制执行） ────────────────────────────
@@ -648,7 +776,11 @@ export class Database {
     return row ?? null;
   }
 
-  /** 记录活跃时间：从 last_active_at 起累计活跃跨度（30 秒内视为连续活跃） */
+  /**
+   * 记录活跃时间：从 last_active_at 起累计活跃跨度。
+   * 网关 15 秒节流一次 touch；为覆盖节流间隙与网络抖动，单次最多累计 30 秒
+   * （封顶语义：防止页面挂机把时长无限拉长；配合节流，正常连续使用误差很小）。
+   */
   touchUsage(userId: number, day: string, nowIso: string): UsageRow {
     const existing = this.getUsage(userId, day);
     if (!existing) {
@@ -694,6 +826,14 @@ export class Database {
       );
     }
     return this.getUsage(userId, day)!;
+  }
+
+  /**
+   * 重置用户用量（主用户改配额时调用）：删除该用户全部 user_usage 记录，
+   * 下次使用从零重新计时/计数——"改配额 = 重新给额度"。
+   */
+  resetUsage(userId: number): void {
+    this.stmt('DELETE FROM user_usage WHERE user_id = ?').run(userId);
   }
 
   // ── 留言 / 聊天 ───────────────────────────────────────────

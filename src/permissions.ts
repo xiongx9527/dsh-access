@@ -85,6 +85,7 @@ export function filterByPathField(value: unknown, allowedFolders: string[], fiel
         item !== null &&
         typeof item === 'object' &&
         typeof (item as Record<string, unknown>)[field] === 'string' &&
+        (item as Record<string, unknown>)[field] !== '' &&
         !folderAllowed((item as Record<string, unknown>)[field] as string, allowedFolders)
       ) {
         continue;
@@ -206,6 +207,62 @@ export function forceRejectApproval(value: unknown, depth = 0): boolean {
   return changed;
 }
 
+/**
+ * 会话历史沙盒降级：子用户打开共享会话时，会话 log 里可能已带更高权限的
+ * permission/preset 与 sandbox/mode（主用户设置过 danger-full-access）——
+ * 直接继承会导致子用户无操作即提权。这里把超过授权级别的 preset/mode 统一
+ * 降级为子用户授权级别，并同步修正 projections.values.permissions.currentValue。
+ * 返回是否有实际改动。
+ */
+export function clampSessionHistorySandbox(value: unknown, allowedMode: SandboxMode | null, depth = 0): boolean {
+  if (depth > 8 || value === null || typeof value !== 'object') return false;
+  if (allowedMode === null) return false;
+  const obj = value as Record<string, unknown>;
+  let changed = false;
+  const allowedRank = SANDBOX_RANK[allowedMode];
+
+  // permission/preset 事件：{ type: 'permission/preset', data: { preset } }
+  if (obj.type === 'permission/preset' && obj.data && typeof obj.data === 'object') {
+    const data = obj.data as Record<string, unknown>;
+    const preset = data.preset;
+    if (typeof preset === 'string' && SANDBOX_RANK[preset as SandboxMode] !== undefined) {
+      const presetRank = SANDBOX_RANK[preset as SandboxMode];
+      if (presetRank > allowedRank) {
+        data.preset = allowedMode;
+        changed = true;
+      }
+    }
+  }
+  // sandbox/mode 事件：{ type: 'sandbox/mode', data: { mode } }
+  if (obj.type === 'sandbox/mode' && obj.data && typeof obj.data === 'object') {
+    const data = obj.data as Record<string, unknown>;
+    const mode = data.mode;
+    if (typeof mode === 'string' && SANDBOX_RANK[mode as SandboxMode] !== undefined) {
+      const modeRank = SANDBOX_RANK[mode as SandboxMode];
+      if (modeRank > allowedRank) {
+        data.mode = allowedMode;
+        changed = true;
+      }
+    }
+  }
+  // projections.values.permissions.currentValue：客户端投影显示的当前 preset
+  if (obj.currentValue === 'danger-full-access' || obj.currentValue === 'workspace-write' || obj.currentValue === 'read-only') {
+    const curRank = SANDBOX_RANK[obj.currentValue as SandboxMode];
+    if (curRank > allowedRank) {
+      obj.currentValue = allowedMode;
+      changed = true;
+    }
+  }
+  // 递归（同时覆盖 events[].event 和 projections.values 两层结构）
+  for (const key of Object.keys(obj)) {
+    const v = obj[key];
+    if (v !== null && typeof v === 'object') {
+      if (clampSessionHistorySandbox(v, allowedMode, depth + 1)) changed = true;
+    }
+  }
+  return changed;
+}
+
 // ── 上传 / git 拦截的路径判定（纯路径 + 方法，不读请求体） ──────────────
 
 /** 上传相关端点：dsh-file-uploads 插件 + dsh-file-path 的"复制到工作区"桥 + dsh-ssh 远程上传 */
@@ -213,22 +270,50 @@ export function isUploadRequest(method: string, pathname: string): boolean {
   if (method !== 'POST' && method !== 'PUT') return false;
   return (
     pathname === '/api/dsh-uploads' ||
+    pathname.startsWith('/api/dsh-uploads/') ||
     pathname === '/api/filePathBridge/importFile' ||
-    pathname === '/api/dsh-uploads/' ||
     pathname === '/api/dsh-ssh/upload'
   );
 }
 
 /**
- * git 相关端点（dsh 内置 git 工具 / git-graph 插件 / aionui-panel 的 git 面板等，尽力匹配）。
- * 同时覆盖“从服务器拿走数据”的其它通道：session.export（会话日志 ZIP）与 dsh-ssh 的远程文件下载。
+ * git 相关端点（dsh 内置 git 工具 RPC：git.clone / git.pull / git.fetch 等；
+ * git-graph 插件；aionui-panel 的 git 面板；以及“从服务器拿走数据”的其它通道：
+ * session.export 会话日志 ZIP、dsh-ssh 远程文件下载、dsh-uploads 文件下载）。
+ * 只匹配 git 前缀的 RPC（不拦 session.fetch 这类普通端点）。
  */
 export function isGitRequest(pathname: string): boolean {
   return (
-    /\/api\/[^/]*(git|clone|pull|fetch)[^/]*/i.test(pathname) ||
+    /^\/api\/git[-.\/]/i.test(pathname) ||
     /^\/aionui-panel\/git[-.]/.test(pathname) ||
     /^\/api\/session[.\/]export/.test(pathname) ||
-    /^\/api\/dsh-ssh[.\/](download|ls)/.test(pathname)
+    /^\/api\/dsh-ssh[.\/](download|ls)/.test(pathname) ||
+    /^\/api\/dsh-uploads[.\/]download/.test(pathname)
+  );
+}
+
+/**
+ * 第三方插件“运维面”端点（仅主用户可访问）：
+ *   - dsh-ssh —— SSH 主机清单/隧道/远程文件：含服务器连接信息（host/port/user/auth/keyReady），
+ *     泄露即扩大 SSH 凭据面；
+ *   - skin-center —— 皮肤中心（未纳入网关权限模型）；
+ *   - modlens —— 模型透镜（未纳入网关权限模型）；
+ *   - dsh-uploads —— 共享上传存储的【列表/删除】（F-12）：枚举全部用户上传文件清单
+ *     与删除他人文件均仅主用户；上传（POST）仍由 allow_upload 门控、下载
+ *     （GET /download）仍由 allowGitDownload 门控，保持原权限语义。
+ * 这些端点不在白名单/沙盒/配额模型内，对子用户一律 403（deny-list 兜底）。
+ */
+export function isAdminOnlyPluginEndpoint(method: string, pathname: string): boolean {
+  return (
+    pathname === '/api/dsh-ssh' ||
+    pathname.startsWith('/api/dsh-ssh/') ||
+    pathname === '/api/skin-center' ||
+    pathname.startsWith('/api/skin-center/') ||
+    pathname === '/modlens' ||
+    pathname.startsWith('/modlens/') ||
+    // F-12：仅精确匹配 /api/dsh-uploads（不含 /download 子路径），且只看
+    // GET（列表）/DELETE（删除）；POST 上传由 isUploadRequest 按 allow_upload 判定
+    (pathname === '/api/dsh-uploads' && (method === 'GET' || method === 'DELETE'))
   );
 }
 
@@ -274,7 +359,7 @@ export function aionuiRootFrom(
   return null;
 }
 
-/** 工作区创建/删除等写操作（受限子用户直接禁止，防止绕过文件夹白名单） */
+/** 工作区创建/删除/重命名/归档/移动等写操作（受限子用户直接禁止，防止绕过文件夹白名单） */
 export function isWorkspaceWrite(pathname: string): boolean {
   return /^\/api\/workspace[.\/](add|import|remove)/.test(pathname);
 }
@@ -314,25 +399,8 @@ export function extractPathFromBody(value: unknown, depth = 0): string | null {
   return null;
 }
 
-// ── token 用量识别（尽力而为：扫描 dsh 流式/JSON 响应里的用量字段） ─────
-
-// dsh 的 TokenUsage：{ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens }。
-// 每个 agent step 上报一次（非累计），因此跨事件求和；input + output 即"两个数据一比对"的总消耗。
-const TOKEN_USAGE_RE = /"(?:inputTokens|outputTokens)"\s*:\s*(\d+)/g;
-
-/**
- * 从一段响应文本里累加 token 用量（input + output）。识别不到返回 0（不会误扣）。
- */
-export function tokensFromText(text: string): number {
-  let total = 0;
-  let m: RegExpExecArray | null;
-  TOKEN_USAGE_RE.lastIndex = 0;
-  while ((m = TOKEN_USAGE_RE.exec(text)) !== null) {
-    const n = Number(m[1]);
-    if (Number.isFinite(n)) total += n;
-  }
-  return total;
-}
+// ── token 用量：已迁移到客户端 TokenReporter（client/token.tsx 读 dsh 的
+// liveTokenUsage 投影并增量上报 /gateway/api/usage/report），本模块不再计量。
 
 /** 当日日期（本地时区 YYYY-MM-DD，与"每日使用时长"语义一致） */
 export function todayLocal(): string {
