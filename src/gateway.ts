@@ -1362,6 +1362,10 @@ export function createGatewayServer(
       if (parsed.pathname.startsWith('/gateway/')) return next();
       const user = sessionOf(req);
       if (!user) {
+        if (parsed.pathname.startsWith('/api/dsh-passwords/remote-access/')) {
+          res.status(401).json({ ok: false, code: 'NOT_AUTHENTICATED', error: '未登录或会话已失效' });
+          return;
+        }
         // 重定向兼容层：记录原始 URL，登录后跳回
         const nextUrl = encodeURIComponent(req.originalUrl);
         res.redirect(302, `/gateway/login?next=${nextUrl}`);

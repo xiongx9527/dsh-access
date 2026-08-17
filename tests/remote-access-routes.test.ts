@@ -15,3 +15,9 @@ test('plugin exposes admin-guarded remote access routes and refreshes service af
   assert.match(source, /remoteAccess\.stopTunnel\(\)/);
   assert.match(source, /await remoteAccess\.setGatewayPort\(port\)/);
 });
+
+test('gateway returns JSON 401 for unauthenticated remote access APIs instead of a login redirect', () => {
+  const source = readFileSync(new URL('../src/gateway.ts', import.meta.url), 'utf8');
+  assert.match(source, /parsed\.pathname\.startsWith\('\/api\/dsh-passwords\/remote-access\/'\)/);
+  assert.match(source, /status\(401\)\.json\(\{ ok: false, code: 'NOT_AUTHENTICATED'/);
+});
