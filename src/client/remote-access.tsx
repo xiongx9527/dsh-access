@@ -112,7 +112,7 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
     ),
     h(
       'section',
-      { className: 'dshpw-remote-card' },
+      { className: 'dshpw-remote-card dshpw-remote-public-card' },
       h('div', { className: 'dshpw-remote-card-head' },
         h('div', null, h('h3', null, t('remotePublicTitle')), h('p', null, t('remotePublicHint', { port: status?.gatewayPort ?? '—' }))),
         h('button', {
