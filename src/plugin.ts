@@ -510,7 +510,9 @@ export function apply(ctx: Context): void {
         try {
           const port = gatewayRuntime?.port ?? cfg.gateway.port;
           await remoteAccess.setGatewayPort(port);
-          writeJson(res, 200, { ok: true, ...(await remoteAccess.status(true)) });
+          const remoteStatus = remoteAccess.statusSnapshot(true);
+          void remoteAccess.prefetchQr(true).catch(() => {});
+          writeJson(res, 200, { ok: true, ...remoteStatus });
         } catch (error) {
           failJson(res, error);
         }
