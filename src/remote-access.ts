@@ -80,7 +80,6 @@ export class RemoteAccessService {
       this.qrEncoder(url),
       new Promise<string | null>((resolve) => {
         const timer = setTimeout(() => resolve(null), 1500);
-        timer.unref();
       }),
     ]);
     if (encoded !== null) this.qrCache.set(url, encoded);
