@@ -1,0 +1,19 @@
+node_modules/
+dist/
+web/dist/
+.env
+*.log
+setup-key.txt
+*.tgz
+tls/
+tls.key
+tls.crt
+data/
+# >>> Comet managed project state >>>
+!/.comet/
+/.comet/*
+!/.comet/config.yaml
+# <<< Comet managed project state <<<
+
+# Superpowers local preview/runtime state
+/.superpowers/

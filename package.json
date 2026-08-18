@@ -1,0 +1,92 @@
+{
+  "name": "dsh-access",
+  "version": "1.0.0",
+  "description": "dsh-access: a server-grade gateway that turns DeepSeek Harness into a multi-tenant platform — remote access + automatic HTTPS, per-subuser permissions & quotas, sandbox enforcement, first-run setup, SQLite auth with at-rest encryption, rate-limit and audit log (bilingual zh/en UI)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "dsh-access": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "license": "BSD-3-Clause",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "gateway",
+    "auth",
+    "login",
+    "password",
+    "extension",
+    "plugin"
+  ],
+  "files": [
+    "dist/",
+    "scripts/",
+    "install.sh",
+    "install.bat",
+    "cordis.yml",
+    "README.md",
+    "README_en.md",
+    "LICENSE",
+    ".env.example"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiongx9527/dsh-access.git"
+  },
+  "homepage": "https://github.com/xiongx9527/dsh-access",
+  "bugs": {
+    "url": "https://github.com/xiongx9527/dsh-access/issues"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "start": "node dist/cli.js serve-gateway",
+    "start:gateway": "node dist/cli.js serve-gateway",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.6",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
+    "esbuild": "^0.25.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}
