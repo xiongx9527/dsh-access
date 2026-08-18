@@ -91,19 +91,19 @@ dsh-passwords install     # 生成随机 SETUP_KEY + 注册插件 + 应用补丁
 
 ### 2. 三步完成首次配置
 
-1. 用平时的方式启动 dsh（dsh 的模型密钥已配好即可，直接运行 `dsh web`；密码门本身无需任何额外配置）——**密码门会被自动拉起，不需要任何额外启动命令**
+1. 用平时的方式启动 dsh（dsh 的模型密钥已配好即可，直接运行 `dsh web`；访问管理本身无需任何额外配置）——**访问管理会被自动拉起，不需要任何额外启动命令**
 2. 浏览器直接打开 `https://<服务器IP>.sslip.io`——第一次访问会**自动进入「首次配置」页**，输入 SETUP_KEY，创建主用户（不用手动输入 `/gateway/setup`）
 3. 之后所有人访问 `https://<服务器IP>.sslip.io` 都会先过登录页
 
 别忘了在防火墙**和云服务商安全组**里放行 **80 和 443** 端口（开不了 80 的机器见下面的「部署场景矩阵」）。
 
-## 密码门跟着 dsh 走
+## 访问管理跟着 dsh 走
 
 不需要 systemd，不需要手动启动网关进程，不需要给 dsh 加任何启动参数：
 
 ```
-dsh 启动 → 插件被加载 → 插件自动拉起密码门（日志就在 dsh 控制台里）
-dsh 退出 → 密码门跟着停（不会留僵尸进程占端口）
+dsh 启动 → 插件被加载 → 插件自动拉起访问管理（日志就在 dsh 控制台里）
+dsh 退出 → 访问管理跟着停（不会留僵尸进程占端口）
 ```
 
 - 高级用法：想单独托管网关进程？`node dist/cli.js serve-gateway` 手动跑，或自己配 systemd 也行。
@@ -131,7 +131,7 @@ dsh 退出 → 密码门跟着停（不会留僵尸进程占端口）
 |---|---|---|---|
 | ✅ 公网服务器，80/443 都能开 | 什么都不用做（默认） | HTTPS（自动证书） | 80 + 443 |
 | ✅ 有自己的域名证书 | `.env` 填 `MCP_GATEWAY_TLS_CERT/KEY`，端口随便改 | HTTPS（你的证书） | 只有你的网关端口，80 完全不用 |
-| ✅ 机器上已有 nginx/caddy 反代 | 反代在 80/443 用真实证书终结 TLS 并转发到密码门；`.env` 设 `MCP_GATEWAY_AUTO_TLS=0` + 高位端口，密码门只监听回环 | HTTPS（反代的证书） | 反代管 80/443，密码门零公网暴露 |
+| ✅ 机器上已有 nginx/caddy 反代 | 反代在 80/443 用真实证书终结 TLS 并转发到访问管理；`.env` 设 `MCP_GATEWAY_AUTO_TLS=0` + 高位端口，访问管理只监听回环 | HTTPS（反代的证书） | 反代管 80/443，访问管理零公网暴露 |
 | ✅ 域名挂在 Cloudflare | CF 边缘终结 TLS 转发到源站任意端口（配置同反代思路） | HTTPS（CF 证书） | 源站只对 CF 开放 |
 | ⚠ 无公网 IP / 纯内网 | `scripts/start-http.mjs` 或 `.env` 设 `AUTO_TLS=0` | HTTP 明文 | 任意端口 |
 | ⚠ 只有裸 IP 且 80 开不了 | 只能 HTTP（协议限制：http-01 固定走 80，裸 IP 又没有 DNS 可验证） | HTTP 明文 | 任意端口 |
@@ -140,7 +140,7 @@ dsh 退出 → 密码门跟着停（不会留僵尸进程占端口）
 
 ## HTTP 模式（明文，能不用就不用）
 
-密码门默认**拒绝**以明文 HTTP 运行。确实只能内网用、且接受风险的话：
+访问管理默认**拒绝**以明文 HTTP 运行。确实只能内网用、且接受风险的话：
 
 ```bash
 node scripts/start-http.mjs [端口]    # 默认 8080，会弹 y/N 确认
@@ -148,11 +148,11 @@ node scripts/start-http.mjs [端口]    # 默认 8080，会弹 y/N 确认
 
 脚本会先显示明文风险警告，输入 `y` 才启动。明文 HTTP 下密码与会话 Cookie 可能被网络中间人嗅探——公网部署请优先使用自动 HTTPS（默认模式，无需配置，只有证书实在签不出来时才用 HTTP 模式）。
 
-更彻底的做法：`.env` 里写 `MCP_GATEWAY_AUTO_TLS=0` 和 `MCP_GATEWAY_PORT=8080`，之后 dsh 启动时插件会直接以 HTTP 模式拉起密码门。
+更彻底的做法：`.env` 里写 `MCP_GATEWAY_AUTO_TLS=0` 和 `MCP_GATEWAY_PORT=8080`，之后 dsh 启动时插件会直接以 HTTP 模式拉起访问管理。
 
-## 设置页里的密码门卡片
+## 设置页里的访问管理卡片
 
-登录 dsh 后，打开 **设置 → 插件**，能看到"dsh-passwords · 密码门"卡片。里面可以：
+登录 dsh 后，打开 **设置 → 插件**，能看到"dsh-passwords · 访问管理"卡片。里面可以：
 
 | 功能 | 谁可用 | 说明 |
 |---|---|---|
@@ -213,7 +213,7 @@ node scripts/start-http.mjs 8080         # 明文 HTTP 模式（危险，y/N 确
 
 - **登录页一直显示"首次配置"？** 说明用户表是空的（新库或数据库被清过）。按页面提示输入 `SETUP_KEY` 重新创建主用户即可。
 - **忘记主用户密码？** 停服后跑 `node -e "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('data/platform.db');db.exec('DELETE FROM users;')"`，重启后重新走首次配置。
-- **dsh 控制台报错误码 30 / 31，密码门没起来？** 见上面「自动 HTTPS」的错误码表。修好后重启 dsh 会自动再拉起。
+- **dsh 控制台报错误码 30 / 31，访问管理没起来？** 见上面「自动 HTTPS」的错误码表。修好后重启 dsh 会自动再拉起。
 - **443 端口绑定失败（非 root 用户）？** Linux 上 1024 以下端口需要 root：用 root/sudo 启动 dsh，或把 `MCP_GATEWAY_PORT` 改成高位端口（如 8443）并自行做端口转发。
 - **dsh 启动报 `duplicate loader entry id`？** 你在 profile 里用过 `dsh plugin add`。它会把 profile 里**所有**声明 `dsh.bundle` 的依赖全部加进 bundles 层，与已装的其它插件重复时 dsh 直接启动失败。卸载 dsh-passwords 后改用 `node scripts/register-plugin.mjs` 精确注册（只追加本插件一个条目）。
 - **npm 装 dsh 报 allow-scripts / node-pty 错？** npm 新版会拦截安装脚本，先放行再重装：`npm config set allow-scripts=@deepseek-ai/dsh-subprocess-local,koffi,node-pty,@google/genai,protobufjs --location=user`，然后重新 `npm install -g @deepseek-ai/dsh`（本项目自身没这个问题，是 dsh 的依赖要跑原生构建）。
@@ -221,7 +221,7 @@ node scripts/start-http.mjs 8080         # 明文 HTTP 模式（危险，y/N 确
 - **数据库文件被偷了要紧吗？** 不要紧。敏感字段全是密文或散列，没有 `.env` 里的密钥解不开；密码本身只有 bcrypt 哈希，本来就没有明文。
 - **想换 `MCP_DB_ENC_KEY`？** 不行。这个密钥一旦启用就不能换，换了一切历史数据都解不开。备份数据库时必须连 `.env` 一起备份。
 - **每次进去都卡在 "Loading plugins…"？** 这是 dsh 在加载它的 ~30 个插件脚本，而 dsh 对插件/静态资源返回的是 `no-cache`，浏览器每次都要全部重新下载。网关已对 `/assets/*` 和带 `rev=` 的 `/plugins/*` 强制一年期 immutable 缓存（文件名/rev 都是内容哈希，dsh 更新会自动换新地址）。升级后**第一次访问仍会完整下载一次，之后刷新秒进**；如果还慢，强刷一次浏览器（Ctrl+Shift+R）让新响应头生效。
-- **访问有点慢？** 密码门每次请求只花约 1-2ms。先查 TLS 握手：`curl -s -o /dev/null -w "TCP:%{time_connect}s TLS:%{time_appconnect}s\n" https://你的地址/gateway/login`——TLS 那项正常是几十毫秒。TCP 快、TLS 也快但还是慢的话，就是你的网络到服务器的链路延迟，代码解决不了。
+- **访问有点慢？** 访问管理每次请求只花约 1-2ms。先查 TLS 握手：`curl -s -o /dev/null -w "TCP:%{time_connect}s TLS:%{time_appconnect}s\n" https://你的地址/gateway/login`——TLS 那项正常是几十毫秒。TCP 快、TLS 也快但还是慢的话，就是你的网络到服务器的链路延迟，代码解决不了。
 
 ## 手动安装（想自己一步步来）
 
@@ -233,7 +233,7 @@ node scripts/start-http.mjs 8080         # 明文 HTTP 模式（危险，y/N 确
 4. 注册插件：`node scripts/register-plugin.mjs`（等价于把 `link:$(pwd)` 加进 `~/.dsh/profiles/web/package.json` 的 dependencies 和 `dsh.profile.bundles` 再 pnpm install。**不要用 `dsh plugin add`**，原因见常见问题）
 5. 应用补丁：`node dist/cli.js patch`（找不到 dsh 目录就用 `MCP_DSH_ROOT=/path/to/@deepseek-ai/dsh` 指定）
 
-之后同样：启动 dsh → 密码门自动拉起 → 打开 `https://<你的地址>` 完成首次配置。
+之后同样：启动 dsh → 访问管理自动拉起 → 打开 `https://<你的地址>` 完成首次配置。
 
 ## 安全与隐私
 

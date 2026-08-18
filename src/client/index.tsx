@@ -149,12 +149,14 @@ if (typeof document !== 'undefined') {
 export const inject = ['slots', 'locale'] as const;
 
 export function apply(ctx: ClientContext): void {
-  ctx.slots.inject('settings.plugin.item', () =>
+  // 独立设置一级入口：不再出现在“插件配置”列表中。
+  ctx.slots.inject('settings.section', () =>
     ctx.slots.register(
       {
-        name: 'settings.plugin.item',
+        name: 'settings.section',
         id: 'dsh-passwords',
-        order: 55,
+        order: 10,
+        label: () => '访问管理',
         locale: 'dshpw',
         inject: () => ({}),
       },

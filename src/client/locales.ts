@@ -6,8 +6,8 @@
 // 优先按 code 本地化，未知 code 回退到服务端返回的 error 文案。
 
 export const zh = {
-  title: 'dsh-passwords · 密码门',
-  desc: '登录网关的账号管理。当前身份：',
+  title: '访问管理',
+  desc: '账号权限与远程访问管理。当前身份：',
   owner: '主用户',
   subuser: '子用户',
   localDirect: '本机直连',
@@ -20,7 +20,7 @@ export const zh = {
   patchOk: '已启用 · 远程连接可用',
   patchBad: '异常：部分功能不可用',
   reloadPatch: '重载补丁',
-  patchHint1: '经密码门登录后，远程浏览器可正常使用 dsh 的全部设置功能。',
+  patchHint1: '经访问管理登录后，远程浏览器可正常使用 dsh 的全部设置功能。',
   patchHint2: 'dsh 升级后若设置页出现异常，点“重载补丁”即可修复（自动重启网页服务并刷新页面）。',
   reloading: '正在重载：网页服务即将重启，页面将自动刷新',
   gatewayPort: '网关端口',
@@ -29,7 +29,7 @@ export const zh = {
   gatewayPortSaved: '网关端口已修改为 {port}',
   gatewayPortInvalid: '端口必须是 1-65535 之间的整数',
   settingsTabs: 'Passwords 设置分类',
-  accountTab: '账号与权限',
+  accountTab: '账号权限',
   remoteTab: '远程访问',
   remoteReady: '统一安全入口已运行',
   remoteUnavailable: '远程入口不可用',
@@ -186,8 +186,8 @@ export const zh = {
 };
 
 export const en: Record<keyof typeof zh, string> = {
-  title: 'dsh-passwords · Password Gate',
-  desc: 'Accounts for the login gateway. Signed in as:',
+  title: 'Access management',
+  desc: 'Account permissions and remote access. Signed in as:',
   owner: 'Owner',
   subuser: 'Subuser',
   localDirect: 'Local access',
@@ -199,7 +199,7 @@ export const en: Record<keyof typeof zh, string> = {
   patchOk: 'Enabled · Remote access ready',
   patchBad: 'Degraded: some features unavailable',
   reloadPatch: 'Reload patch',
-  patchHint1: 'After signing in through the password gate, remote browsers can use all dsh settings normally.',
+  patchHint1: 'After signing in through Access management, remote browsers can use all dsh settings normally.',
   patchHint2: 'If the settings page breaks after a dsh upgrade, click "Reload patch" to fix it (restarts the web service and refreshes the page).',
   reloading: 'Reloading: the web service will restart and the page will refresh automatically',
   gatewayPort: 'Gateway port',
@@ -208,7 +208,7 @@ export const en: Record<keyof typeof zh, string> = {
   gatewayPortSaved: 'Gateway port changed to {port}',
   gatewayPortInvalid: 'Port must be an integer between 1 and 65535',
   settingsTabs: 'Passwords settings sections',
-  accountTab: 'Accounts & permissions',
+  accountTab: 'Account permissions',
   remoteTab: 'Remote access',
   remoteReady: 'Unified secure entry is running',
   remoteUnavailable: 'Remote entry unavailable',

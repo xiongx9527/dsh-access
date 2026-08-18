@@ -91,7 +91,7 @@ At the end the script prints your **setup key (SETUP_KEY)** on screen; it is als
 
 ### 2. Finish setup in three steps
 
-1. Start dsh the way you normally do (with dsh's model key already configured, just run `dsh web` — the gate itself needs no extra configuration) — **the password gate starts automatically, no extra commands**
+1. Start dsh the way you normally do (with dsh's model key already configured, just run `dsh web` — the gate itself needs no extra configuration) — **the Access management starts automatically, no extra commands**
 2. Open `https://<server-IP>.sslip.io` in a browser — on the first visit it **automatically shows the first-time setup page**; enter the SETUP_KEY and create the owner account (no need to type `/gateway/setup` manually)
 3. From now on, everyone visiting `https://<server-IP>.sslip.io` must pass the login page first
 
@@ -102,7 +102,7 @@ Remember to open ports **80 and 443** in both the server firewall **and** your c
 No systemd unit, no manual gateway process, no extra flags for dsh:
 
 ```
-dsh starts → plugin loads → plugin spawns the password gate (logs appear in dsh's console)
+dsh starts → plugin loads → plugin spawns the Access management (logs appear in dsh's console)
 dsh exits  → the gate stops with it (no orphan process holding ports)
 ```
 
@@ -152,7 +152,7 @@ For a permanent setup: put `MCP_GATEWAY_AUTO_TLS=0` and `MCP_GATEWAY_PORT=8080` 
 
 ## The gate card in dsh settings
 
-After logging in to dsh, open **Settings → Plugins** to find the "dsh-passwords · Password gate" card:
+After logging in to dsh, open **Settings → Plugins** to find the "dsh-passwords · Access management" card:
 
 | Feature | Who can use it | Notes |
 |---|---|---|
