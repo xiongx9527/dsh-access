@@ -118,7 +118,7 @@ const CSS = `
 .dshpw-remote-card-head h3{margin:0;font-size:14px}.dshpw-remote-card-head p{margin:3px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px}
 .dshpw-remote-badge{padding:4px 9px;border-radius:999px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-tertiary)}
 .dshpw-remote-badge.ready{background:color-mix(in srgb,var(--dsw-alias-label-success,#22c55e) 12%,transparent);color:var(--dsw-alias-label-success,#22c55e)}
-.dshpw-remote-lan,.dshpw-remote-public{display:grid;grid-template-columns:112px minmax(0,1fr);gap:13px;align-items:center;margin-top:11px}
+.dshpw-remote-lan,.dshpw-remote-public{display:grid;grid-template-columns:112px minmax(0,1fr);gap:24px;align-items:center;margin-top:11px}
 .dshpw-remote-qr{width:112px;height:112px;padding:6px;border:1px solid var(--dsw-alias-border-l2);border-radius:11px;background:#fff}.dshpw-remote-qr-placeholder{width:112px;height:112px;display:grid;place-items:center;padding:8px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:11px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:center}.dshpw-remote-qr.small{width:112px;height:112px}
 .dshpw-remote-copy{min-width:0}.dshpw-remote-copy>p{margin:0 0 8px}.dshpw-remote-url{display:flex;align-items:center;gap:8px;margin:8px 0}
 .dshpw-remote-url code{min-width:0;flex:1;padding:9px 10px;border-radius:8px;background:var(--dsw-alias-bg-layer-3);overflow-wrap:anywhere;color:var(--dsw-alias-label-primary)}
