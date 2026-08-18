@@ -7,8 +7,8 @@
 - `package.json` 的 package name、bin、exports、版本、仓库/homepage/bugs 地址改为 `dsh-access` / `xiongx9527/dsh-access`。
 - 插件导出名、客户端 section id、slot id、运行时日志前缀和测试标识改为 `dsh-access`。
 - 所有 `/api/dsh-access/*` 路径改为 `/api/dsh-access/*`，客户端、网关策略、测试和文档同步更新。
-- `DSH_ACCESS_ENV_FILE` 改为 `DSH_ACCESS_ENV_FILE`，安装脚本和运行说明同步更新。
-- 用户可见名称统一为“访问管理” / “Access management”，不显示 `dsh-access` 或 `dsh-access`。
+- 旧环境变量 `DSH_PASSWORDS_ENV_FILE` 改为 `DSH_ACCESS_ENV_FILE`，安装脚本和运行说明同步更新。
+- 用户可见名称统一为“访问管理” / “Access management”，不显示旧包名或旧仓库名。
 - 新包版本固定为 `1.0.0`，更新 package-lock 和安装/升级说明。
 - 从当前 `main` 创建独立公开 GitHub 仓库 `xiongx9527/dsh-access` 并推送 `main`；验证成功后不自动删除旧 fork。
 - 保留数据库、`.env` 数据格式、网关端口、账号权限和远程访问行为。
@@ -17,9 +17,9 @@
 
 - 不改变账号、权限、配额、工作区、二维码、隧道或移动端行为。
 - 不迁移或删除用户数据库、密钥、cloudflared 缓存或运行数据。
-- 不自动删除旧 GitHub fork `xiongx9527/dsh-access`。
-- 不保留旧 `dsh-access` API、插件 ID、环境变量或 npm 包别名；这是一次明确的全量重命名。
-- 不修改上游 `xiongx9527/dsh-access` 仓库。
+- 不自动删除旧 GitHub fork `xiongx9527/dsh-passwords-ext`。
+- 不保留旧包名对应的 API、插件 ID、环境变量或 npm 包别名；这是一次明确的全量重命名。
+- 不修改原上游仓库。
 - 不在本 change 中创建 PR；只创建独立仓库并推送 main。
 
 # Acceptance examples
@@ -32,14 +32,14 @@
 - A6：登录页、未配置错误、HTTP 警告和文档中的用户可见品牌显示“访问管理” / “Access management”。
 - A7：新包 `dsh-access@1.0.0` 可构建、可打包、可安装；`npm test` 和 `npm run build` 通过。
 - A8：安装新包后 DSH Web、访问管理网关、LAN 状态和远程 API 正常；数据库与原账号仍可登录。
-- A9：本地 `main` 保持干净且包含重命名提交；独立 GitHub 仓库 `xiongx9527/dsh-access` 的 `main` 指向同一提交。
-- A10：旧 fork `xiongx9527/dsh-access` 仍存在且不被本 change 自动删除，用户可在验证后手动删除。
+- A9：本地候选快照保持干净；独立 GitHub 仓库 `xiongx9527/dsh-access` 的 `main` 为 PUBLIC、非 fork，且文件内容与候选快照一致。
+- A10：旧 fork `xiongx9527/dsh-passwords-ext` 仍存在且不被本 change 自动删除，用户可在验证后手动删除。
 
 # Constraints and invariants
 
 - 新 package version 必须是 `1.0.0`。
 - UI 品牌名称固定为“访问管理” / “Access management”。
-- 旧 `dsh-access` 相关技术标识不保留兼容别名。
+- 旧包名相关技术标识不保留兼容别名。
 - 数据库、SETUP_KEY 派生密钥和现有 `.env` 数据不变。
 - 新仓库必须从当前 main 创建为独立公开仓库，不显示 fork 关系。
 - 当前 Native change 使用独立 worktree，目标分支为 `main`。
@@ -62,4 +62,4 @@
 - 用 `git grep` 检查活跃源代码、测试和文档中的旧技术标识。
 - 运行 `npm test`、`npm run build`、`npm pack --dry-run`。
 - 在临时运行目录安装新包，验证 DSH 3080、访问管理网关和数据库登录。
-- 用 GitHub CLI 创建独立仓库，推送 main，确认仓库 `isFork=false`、默认分支提交匹配本地。
+- 用 GitHub CLI 创建独立仓库，推送 main，确认仓库 `isFork=false`、默认分支内容匹配候选快照。
