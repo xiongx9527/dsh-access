@@ -54,7 +54,7 @@
 
 ## Verification
 
-- `git grep -n -i 'dsh-access\|dsh-access\|DSH_ACCESS_ENV_FILE' -- active source/tests/docs` returns no active identity hits, excluding Git history and explicitly retained provenance artifacts.
+- an active-source scan for legacy package, repository, component and environment identifiers returns no hits, excluding Git history and explicitly retained provenance artifacts.
 - `npm test` passes.
 - `npm run build` passes.
 - `npm pack --dry-run` lists `dsh-access-1.0.0.tgz`.
