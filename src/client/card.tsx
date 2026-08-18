@@ -1,5 +1,4 @@
-// dsh-passwords 设置卡片：可折叠（与官方 PluginCard 同形态：header 按钮 +
-// aria-expanded + 展开才渲染 body）。内容：
+// 访问管理设置页：进入后直接展示完整内容，不再折叠。内容：
 //   - 远程设置补丁：状态 + "重载补丁"按钮（任何登录用户可触发；补丁强制启用）
 //   - 用户管理：改密/改名/子用户分配（主用户 admin 可管理所有，子用户只能改自己）
 // 数据面：/api/dsh-passwords/*（网关注入的 JWT cookie 鉴权）。
@@ -142,32 +141,8 @@ function errText(error: unknown, tr: (key: string, params?: Record<string, strin
   return tr('opFailed');
 }
 
-function Chevron(props: { open: boolean }) {
-  return h(
-    'svg',
-    {
-      className: 'dshpw-chevron' + (props.open ? ' open' : ''),
-      width: 14,
-      height: 14,
-      viewBox: '0 0 24 24',
-      fill: 'none',
-      'aria-hidden': 'true',
-    },
-    h('path', {
-      d: 'M6 9l6 6 6-6',
-      stroke: 'currentColor',
-      strokeWidth: 2,
-      strokeLinecap: 'round',
-      strokeLinejoin: 'round',
-    }),
-  );
-}
-
 export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
   const t = props.t;
-  // 折叠状态（与官方 PluginCard 一致：默认收起，展开状态为卡片本地状态）
-  const [open, setOpen] = useState(false);
-
   const [data, setData] = useState<StateData | null>(null);
   const [patchState, setPatchState] = useState<PatchState | null>(null);
   const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | null>(null);
@@ -387,36 +362,6 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
     return [user.username, details?.remark ?? '', details?.workspaceRoot ?? '']
       .some((value) => value.toLocaleLowerCase().includes(cardUserNeedle));
   });
-
-  const header = h(
-    'button',
-    {
-      type: 'button',
-      className: 'dshpw-header',
-      'aria-expanded': open,
-      'aria-label': `${open ? t('collapse') : t('expand')}: dsh-passwords`,
-      onClick: () => setOpen(!open),
-    },
-    h(
-      'span',
-      { className: 'dshpw-head' },
-      h('span', { className: 'dshpw-title' }, t('title')),
-      h(
-        'span',
-        { className: 'dshpw-desc' },
-        t('desc'),
-        h('strong', null, identity.kind === 'local' ? t('localDirect') : me || '—'),
-        identity.kind === 'local'
-          ? h('span', { className: 'dshpw-badge admin' }, t('fullAccess'))
-          : identity.kind === 'admin'
-            ? h('span', { className: 'dshpw-badge admin' }, t('owner'))
-            : identity.kind === 'user'
-              ? h('span', { className: 'dshpw-badge' }, t('subuser'))
-              : null,
-      ),
-    ),
-    h(Chevron, { open }),
-  );
 
   const body = h(
     'div',
@@ -718,5 +663,5 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
     notice && h('div', { className: 'dshpw-ok' }, notice),
   );
 
-  return h('div', { className: 'dshpw-card' + (open ? ' open' : '') }, header, open ? body : null);
+  return h('div', { className: 'dshpw-card open' }, body);
 }

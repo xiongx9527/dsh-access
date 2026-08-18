@@ -17,3 +17,10 @@ test('user-facing access management labels use the new names', () => {
   assert.match(source, /title: 'Access management'/);
   assert.match(source, /accountTab: 'Account permissions'/);
 });
+
+test('access management page renders open without a collapsible card header', () => {
+  const source = readFileSync(new URL('../src/client/card.tsx', import.meta.url), 'utf8');
+  assert.match(source, /return h\('div', \{ className: 'dshpw-card open' \}, body\)/);
+  assert.doesNotMatch(source, /aria-expanded.*open/);
+  assert.doesNotMatch(source, /const \[open, setOpen\]/);
+});
