@@ -1,9 +1,9 @@
 schema: comet.native.v4
 name: rename-to-dsh-access
 language: zh-CN
-phase: verify
+phase: shape
 status: active
-state_version: 4
+state_version: 11
 brief: brief.md
 spec_changes:
   - capability: rename
@@ -15,358 +15,50 @@ workspace:
   target_branch: main
   finish: null
 loop:
-  stage: verify-ready
-  goal_cycle: 1
-  iteration: 1
-  attempt: 1
+  stage: shape
+  goal_cycle: 2
+  iteration: 0
+  attempt: 0
   retry_epoch: 0
   failed_iteration_count: 0
   no_progress_count: 0
   execution_failure_count: 0
   previous_unresolved_ids: []
-  next_action: await-verifier-result
-acceptance:
-  - id: A1
-    source: brief.md
-    text: A1：`package.json` 的 `name`、`version`、`bin`、exports、repository、homepage 和
-      bugs 全部指向 `dsh-access` / `1.0.0` / 新仓库。
-    result: pending
-    reason: null
-  - id: A2
-    source: brief.md
-    text: A2：源代码、客户端 bundle、测试、安装脚本和活跃文档中不再出现 `dsh-access` 或 `dsh-access`；历史 Git
-      提交不要求改写。
-    result: pending
-    reason: null
-  - id: A3
-    source: brief.md
-    text: A3：`/api/dsh-access/*` 路由可用，`/api/dsh-access/*` 路径不存在且不会被客户端引用。
-    result: pending
-    reason: null
-  - id: A4
-    source: brief.md
-    text: A4：插件导出名、settings section id、客户端注册 id、运行时环境变量和日志标识统一以 `dsh-access` 命名。
-    result: pending
-    reason: null
-  - id: A5
-    source: brief.md
-    text: A5：设置侧栏仍显示“访问管理”，页面两个 Tab 仍显示“账号权限”和“远程访问”；页面不出现旧包名。
-    result: pending
-    reason: null
-  - id: A6
-    source: brief.md
-    text: A6：登录页、未配置错误、HTTP 警告和文档中的用户可见品牌显示“访问管理” / “Access management”。
-    result: pending
-    reason: null
-  - id: A7
-    source: brief.md
-    text: A7：新包 `dsh-access@1.0.0` 可构建、可打包、可安装；`npm test` 和 `npm run build` 通过。
-    result: pending
-    reason: null
-  - id: A8
-    source: brief.md
-    text: A8：安装新包后 DSH Web、访问管理网关、LAN 状态和远程 API 正常；数据库与原账号仍可登录。
-    result: pending
-    reason: null
-  - id: A9
-    source: brief.md
-    text: A9：本地 `main` 保持干净且包含重命名提交；独立 GitHub 仓库 `xiongx9527/dsh-access` 的 `main`
-      指向同一提交。
-    result: pending
-    reason: null
-  - id: A10
-    source: brief.md
-    text: A10：旧 fork `xiongx9527/dsh-access` 仍存在且不被本 change 自动删除，用户可在验证后手动删除。
-    result: pending
-    reason: null
-  - id: A11
-    source: specs/rename/spec.md
-    text: "| 位置 | 目标值 |"
-    result: pending
-    reason: null
-  - id: A12
-    source: specs/rename/spec.md
-    text: "| npm package | `dsh-access` |"
-    result: pending
-    reason: null
-  - id: A13
-    source: specs/rename/spec.md
-    text: "| version | `1.0.0` |"
-    result: pending
-    reason: null
-  - id: A14
-    source: specs/rename/spec.md
-    text: "| CLI | `dsh-access` |"
-    result: pending
-    reason: null
-  - id: A15
-    source: specs/rename/spec.md
-    text: "| plugin name | `dsh-access` |"
-    result: pending
-    reason: null
-  - id: A16
-    source: specs/rename/spec.md
-    text: "| settings section id | `dsh-access` |"
-    result: pending
-    reason: null
-  - id: A17
-    source: specs/rename/spec.md
-    text: "| UI label | `访问管理` / `Access management` |"
-    result: pending
-    reason: null
-  - id: A18
-    source: specs/rename/spec.md
-    text: "| API prefix | `/api/dsh-access/` |"
-    result: pending
-    reason: null
-  - id: A19
-    source: specs/rename/spec.md
-    text: "| env file variable | `DSH_ACCESS_ENV_FILE` |"
-    result: pending
-    reason: null
-  - id: A20
-    source: specs/rename/spec.md
-    text: "| GitHub repository | `xiongx9527/dsh-access` |"
-    result: pending
-    reason: null
-  - id: A21
-    source: specs/rename/spec.md
-    text: "`package.json.name` is `dsh-access` and `version` is `1.0.0`."
-    result: pending
-    reason: null
-  - id: A22
-    source: specs/rename/spec.md
-    text: "`bin`, `main`, `types`, exports, package files and package scripts use
-      the new package identity."
-    result: pending
-    reason: null
-  - id: A23
-    source: specs/rename/spec.md
-    text: repository/homepage/bugs point to
-      `https://github.com/xiongx9527/dsh-access`.
-    result: pending
-    reason: null
-  - id: A24
-    source: specs/rename/spec.md
-    text: "`src/plugin.ts` exports `name = 'dsh-access'`."
-    result: pending
-    reason: null
-  - id: A25
-    source: specs/rename/spec.md
-    text: Client settings section, account, mobile, chat and token ids use
-      `dsh-access` prefixes.
-    result: pending
-    reason: null
-  - id: A26
-    source: specs/rename/spec.md
-    text: Runtime env lookup uses `DSH_ACCESS_ENV_FILE`; no `DSH_ACCESS_ENV_FILE`
-      fallback remains.
-    result: pending
-    reason: null
-  - id: A27
-    source: specs/rename/spec.md
-    text: Runtime log labels use `[dsh-access]` where the label is user-visible in
-      the console.
-    result: pending
-    reason: null
-  - id: A28
-    source: specs/rename/spec.md
-    text: Every active client request changes from `/api/dsh-access/...` to
-      `/api/dsh-access/...`.
-    result: pending
-    reason: null
-  - id: A29
-    source: specs/rename/spec.md
-    text: Gateway exact-route registration, remote-access authentication, request
-      policy checks and tests use the new prefix.
-    result: pending
-    reason: null
-  - id: A30
-    source: specs/rename/spec.md
-    text: No old API alias is registered.
-    result: pending
-    reason: null
-  - id: A31
-    source: specs/rename/spec.md
-    text: Existing response models, authentication, permissions and database records
-      remain unchanged.
-    result: pending
-    reason: null
-  - id: A32
-    source: specs/rename/spec.md
-    text: Settings section label remains `访问管理`.
-    result: pending
-    reason: null
-  - id: A33
-    source: specs/rename/spec.md
-    text: Page title and error/login copy use `访问管理` / `Access management`.
-    result: pending
-    reason: null
-  - id: A34
-    source: specs/rename/spec.md
-    text: Account tab remains `账号权限`; remote tab remains `远程访问`.
-    result: pending
-    reason: null
-  - id: A35
-    source: specs/rename/spec.md
-    text: Active README and installation docs use the new package/repository/CLI
-      names and do not present `dsh-access` as an installable identity.
-    result: pending
-    reason: null
-  - id: A36
-    source: specs/rename/spec.md
-    text: Technical historical archive text may retain provenance only if it is not
-      shipped as active package documentation; shipped files and active source
-      must not expose the old name.
-    result: pending
-    reason: null
-  - id: A37
-    source: specs/rename/spec.md
-    text: Create a new public non-fork repository `xiongx9527/dsh-access`.
-    result: pending
-    reason: null
-  - id: A38
-    source: specs/rename/spec.md
-    text: Push the verified local `main` to the new repository's `main`.
-    result: pending
-    reason: null
-  - id: A39
-    source: specs/rename/spec.md
-    text: Verify `isFork=false`, default branch `main`, and remote HEAD equals local
-      HEAD.
-    result: pending
-    reason: null
-  - id: A40
-    source: specs/rename/spec.md
-    text: Leave `xiongx9527/dsh-access` untouched for the user to delete manually.
-    result: pending
-    reason: null
-  - id: A41
-    source: specs/rename/spec.md
-    text: Do not rename SQLite files, tables, database fields, SETUP_KEY-derived
-      values, or gateway port configuration.
-    result: pending
-    reason: null
-  - id: A42
-    source: specs/rename/spec.md
-    text: Do not change remote access behavior, QR generation, tunnel behavior,
-      mobile layout, account behavior or password policy.
-    result: pending
-    reason: null
-  - id: A43
-    source: specs/rename/spec.md
-    text: The old package/API/env identifiers are intentionally not supported after
-      this change.
-    result: pending
-    reason: null
-  - id: A44
-    source: specs/rename/spec.md
-    text: "`git grep -n -i 'dsh-access\\|dsh-access\\|DSH_ACCESS_ENV_FILE' -- active
-      source/tests/docs` returns no active identity hits, excluding Git history
-      and explicitly retained provenance artifacts."
-    result: pending
-    reason: null
-  - id: A45
-    source: specs/rename/spec.md
-    text: "`npm test` passes."
-    result: pending
-    reason: null
-  - id: A46
-    source: specs/rename/spec.md
-    text: "`npm run build` passes."
-    result: pending
-    reason: null
-  - id: A47
-    source: specs/rename/spec.md
-    text: "`npm pack --dry-run` lists `dsh-access-1.0.0.tgz`."
-    result: pending
-    reason: null
-  - id: A48
-    source: specs/rename/spec.md
-    text: New package installs and starts DSH with the existing database.
-    result: pending
-    reason: null
-  - id: A49
-    source: specs/rename/spec.md
-    text: New standalone GitHub repository contains the verified main commit.
-    result: pending
-    reason: null
-builder_handoff:
-  candidate_id: 2f0e9328-dbb5-445d-9dc1-c961516acc48
-  identity_provider: skill-coordinated
-  builder_execution_ref: skill-coordinated:builder:40bfc346-8a96-41cc-95ef-2a1186bde830
-  iteration: 1
-  summary:
-    text: 完成旧技术标识 -> dsh-access 全量重命名候选：package name/bin/version=
-      dsh-access/1.0.0，插件 name、settings section、客户端/服务端 ID、API
-      前缀、环境变量、CLI、安装脚本、文档和日志标识均已迁移；用户界面保留“访问管理”，旧
-      旧包名、旧仓库名、旧环境变量和旧网关称呼
-      活跃标识扫描无命中；数据库与配置数据结构不变。已创建公开独立仓库 xiongx9527/dsh-access 并确认 isFork=false，但
-      GitHub HTTPS 当前持续连接超时，当前 main 快照尚未推送；旧 fork 未删除。
-    truncated: false
-  addressed_acceptance_ids:
-    - A1
-    - A2
-    - A3
-    - A4
-    - A5
-    - A6
-    - A7
-    - A8
-    - A9
-    - A10
-  checks:
-    - name:
-        text: npm test
-        truncated: false
-      result: passed
-      note:
-        text: 104 tests passed, 0 failed
-        truncated: false
-    - name:
-        text: npm run build
-        truncated: false
-      result: passed
-      note:
-        text: dsh-access@1.0.0 TypeScript and client build completed
-        truncated: false
-    - name:
-        text: npm pack --dry-run
-        truncated: false
-      result: passed
-      note:
-        text: produced dsh-access-1.0.0.tgz contents
-        truncated: false
-    - name:
-        text: active old identifier scan
-        truncated: false
-      result: passed
-      note:
-        text: no legacy package, repository, environment-variable or gateway-name hits outside excluded Git history/node_modules/dist
-        truncated: false
-    - name:
-        text: standalone repository metadata
-        truncated: false
-      result: passed
-      note:
-        text: xiongx9527/dsh-access exists, PUBLIC, isFork=false
-        truncated: false
-  checks_truncated: false
-  known_limits:
-    - text: Pushing the current main snapshot to the new standalone repository failed
-        repeatedly with GitHub HTTPS connection timeouts; retry is required
-        before archive.
-      truncated: false
-    - text: The previous fork is intentionally retained for
-        manual deletion after the new repository is verified.
-      truncated: false
-    - text: No package publish to npm was performed.
-      truncated: false
-  known_limits_truncated: false
-  submitted_at: 2026-08-18T05:13:42.427Z
+  next_action: confirm-shape
+acceptance: []
+builder_handoff: null
 blockers: []
 verification: null
-history: []
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 第一轮 Verifier 发现旧环境变量、旧组件名、用户文案和安装来源遗漏；Builder 已完成修复，并新增 dsh-access@1.0.0
+        独立仓库快照推送。第一轮候选已过期，按最新工作区重新回到 Build。
+      truncated: false
+    completed_at: 2026-08-18T06:06:41.480Z
+  - goal_cycle: 1
+    iteration: 2
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 最新候选已修复旧环境变量、旧组件名、旧用户文案和规格污染；独立仓库已用当前完整快照更新到 main ref d61f66b，旧
+        fork仍保留。第一轮验证候选已过期，重新从当前 worktree进入 Build。
+      truncated: false
+    completed_at: 2026-08-18T10:02:29.218Z
+  - goal_cycle: 1
+    iteration: 3
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native confirmed acceptance criteria changed
+      truncated: false
+    completed_at: 2026-08-18T10:04:16.868Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null
