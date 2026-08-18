@@ -1,4 +1,4 @@
-// dsh-passwords 设置卡片的双语词典（locale 命名空间 'dshpw'）。
+// dsh-access 设置卡片的双语词典（locale 命名空间 'dshpw'）。
 // 注册进 dsh 的 locale 服务后，卡片文字跟随 dsh 设置里的语言
 // （设置 → 通用 → 语言 / Settings → General → Language），切换即生效。
 //

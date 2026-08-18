@@ -1,5 +1,5 @@
 /** Marker added by the 3088 gateway before proxying to the loopback DSH host. */
-export const GATEWAY_PROXY_HEADER = 'x-dsh-passwords-gateway-proxy';
+export const GATEWAY_PROXY_HEADER = 'x-dsh-access-gateway-proxy';
 
 export type ProxyHeaders = Record<string, string | string[] | undefined>;
 

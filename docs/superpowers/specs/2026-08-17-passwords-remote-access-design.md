@@ -4,7 +4,7 @@
 
 ## 1. 背景
 
-`dsh-passwords` 已经通过登录网关将远程请求转发到本机 DSH Web，并提供账号、封禁、会话撤销、子用户权限和工作区隔离。`dsh-pocket` 另行启动 3081 代理，提供局域网二维码、Cloudflare 临时隧道和移动端页面适配。
+`dsh-access` 已经通过登录网关将远程请求转发到本机 DSH Web，并提供账号、封禁、会话撤销、子用户权限和工作区隔离。`dsh-pocket` 另行启动 3081 代理，提供局域网二维码、Cloudflare 临时隧道和移动端页面适配。
 
 两个插件同时运行会形成两套远程入口：
 
@@ -159,11 +159,11 @@ Cloudflare 临时隧道只指向 Passwords 网关：
 
 ### 5.4 API
 
-新增管理员 API，沿用 `/api/dsh-passwords/*` 命名空间：
+新增管理员 API，沿用 `/api/dsh-access/*` 命名空间：
 
-- `GET /api/dsh-passwords/remote-access/status`
-- `POST /api/dsh-passwords/remote-access/tunnel/start`
-- `POST /api/dsh-passwords/remote-access/tunnel/stop`
+- `GET /api/dsh-access/remote-access/status`
+- `POST /api/dsh-access/remote-access/tunnel/start`
+- `POST /api/dsh-access/remote-access/tunnel/stop`
 
 状态响应包含：
 

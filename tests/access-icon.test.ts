@@ -14,5 +14,5 @@ test('plugin installs an access-specific DOM icon without changing the host shel
   assert.match(source, /dshpw-access-nav-icon/);
   assert.match(source, /MutationObserver/);
   assert.match(source, /m5\.5 8/);
-  assert.match(source, /dsh-passwords: access navigation icon/);
+  assert.match(source, /dsh-access: access navigation icon/);
 });

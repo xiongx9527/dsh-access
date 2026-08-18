@@ -7,7 +7,7 @@ import { Database } from '../src/db.js';
 import { createFieldCrypto } from '../src/encrypt.js';
 
 function createDatabase(): Database {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-passwords-ext-db-'));
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-db-'));
   const db = new Database(path.join(dir, 'platform.db'), createFieldCrypto('', 'test-setup-key'));
   db.init();
   return db;

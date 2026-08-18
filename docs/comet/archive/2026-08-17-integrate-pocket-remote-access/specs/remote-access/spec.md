@@ -36,9 +36,9 @@
 
 插件提供以下 exact 路由：
 
-- `GET /api/dsh-passwords/remote-access/status`
-- `POST /api/dsh-passwords/remote-access/tunnel/start`
-- `POST /api/dsh-passwords/remote-access/tunnel/stop`
+- `GET /api/dsh-access/remote-access/status`
+- `POST /api/dsh-access/remote-access/tunnel/start`
+- `POST /api/dsh-access/remote-access/tunnel/stop`
 
 状态响应的完整公开模型为：
 
@@ -92,7 +92,7 @@ interface RemoteAccessStatus {
 
 ## 兼容与迁移
 
-- 安装 `dsh-passwords-ext` 后不要求安装 `dsh-pocket`。
+- 安装 `dsh-access` 后不要求安装 `dsh-pocket`。
 - 已安装 Pocket 时不自动卸载；文档提示停止或移除 Pocket 以避免重复入口和端口占用。
 - 不迁移 Pocket 的临时隧道 URL、进程状态或缓存。
 - 继续使用现有 Passwords SQLite、认证、权限和网关配置。

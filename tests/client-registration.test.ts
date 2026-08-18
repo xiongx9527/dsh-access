@@ -37,7 +37,7 @@ test('gateway client registers the persistent sidebar account action after ident
     const registered: Array<{ name: string; id?: string; priority?: number; order?: number }> = [];
     apply(context(registered) as never);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.ok(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-passwords-account' && entry.order === 10_000));
+    assert.ok(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-access-account' && entry.order === 10_000));
   });
 });
 
@@ -46,7 +46,7 @@ test('direct 3080-style client does not register an account action when gateway 
     const registered: Array<{ name: string; id?: string; priority?: number; order?: number }> = [];
     apply(context(registered) as never);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-passwords-account'), false);
+    assert.equal(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-access-account'), false);
     assert.equal(registered.some((entry) => entry.name === 'sidebar.settings' && entry.priority === -100), false);
   });
 });
@@ -58,7 +58,7 @@ test('client plugin shadows the native settings seat only for a subuser', async 
     const registered: Array<{ name: string; id?: string; priority?: number; order?: number }> = [];
     apply(context(registered) as never);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.ok(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-passwords-account'));
+    assert.ok(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-access-account'));
     assert.ok(registered.some((entry) => entry.name === 'sidebar.settings' && entry.priority === -100));
   });
 });
@@ -70,7 +70,7 @@ test('gateway admin also hides the native settings seat while keeping the accoun
     const registered: Array<{ name: string; id?: string; priority?: number; order?: number }> = [];
     apply(context(registered) as never);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.ok(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-passwords-account'));
+    assert.ok(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-access-account'));
     assert.ok(registered.some((entry) => entry.name === 'sidebar.settings' && entry.priority === -100));
   });
 });
@@ -164,21 +164,21 @@ test('quota inputs have visible labels in both settings and account management',
 test('legacy settings card uses local plugin routes for overview and permission saves', () => {
   const cardSource = readFileSync(new URL('../src/client/card.tsx', import.meta.url), 'utf8');
   const pluginSource = readFileSync(new URL('../src/plugin.ts', import.meta.url), 'utf8');
-  assert.match(cardSource, /api<PermOverview>\('\/api\/dsh-passwords\/overview'\)/);
-  assert.match(cardSource, /api\('\/api\/dsh-passwords\/permissions'/);
+  assert.match(cardSource, /api<PermOverview>\('\/api\/dsh-access\/overview'\)/);
+  assert.match(cardSource, /api\('\/api\/dsh-access\/permissions'/);
   assert.doesNotMatch(cardSource, /\/gateway\/api\/(overview|permissions)/);
-  assert.match(pluginSource, /path: '\/api\/dsh-passwords\/overview'/);
-  assert.match(pluginSource, /path: '\/api\/dsh-passwords\/permissions'/);
+  assert.match(pluginSource, /path: '\/api\/dsh-access\/overview'/);
+  assert.match(pluginSource, /path: '\/api\/dsh-access\/permissions'/);
 });
 
 test('legacy settings card exposes an admin-only configurable gateway port', () => {
   const cardSource = readFileSync(new URL('../src/client/card.tsx', import.meta.url), 'utf8');
   const pluginSource = readFileSync(new URL('../src/plugin.ts', import.meta.url), 'utf8');
-  assert.match(cardSource, /api<GatewayConfig>\('\/api\/dsh-passwords\/gateway\/config'\)/);
-  assert.match(cardSource, /api(?:<GatewayConfig>)?\('\/api\/dsh-passwords\/gateway\/config', \{ port:/);
+  assert.match(cardSource, /api<GatewayConfig>\('\/api\/dsh-access\/gateway\/config'\)/);
+  assert.match(cardSource, /api(?:<GatewayConfig>)?\('\/api\/dsh-access\/gateway\/config', \{ port:/);
   assert.match(cardSource, /t\('gatewayPort'\)/);
   assert.match(cardSource, /t\('saveGatewayPort'\)/);
-  assert.match(pluginSource, /path: '\/api\/dsh-passwords\/gateway\/config'/);
+  assert.match(pluginSource, /path: '\/api\/dsh-access\/gateway\/config'/);
   assert.match(pluginSource, /caller\.role !== 'admin'/);
   assert.match(pluginSource, /restartGatewayAndRefreshRemote\(gatewayRuntime, remoteAccess, port\)/);
 });

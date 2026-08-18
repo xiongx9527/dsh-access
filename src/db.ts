@@ -296,7 +296,7 @@ export class Database {
         // 解密失败返回 '⟨无法解密⟩' 占位符：跳过该行并告警，
         // 绝不能把占位符当明文加密写回（否则原始密文被覆盖，数据永久丢失）
         if (decrypted === '⟨无法解密⟩') {
-          console.error(`[dsh-passwords] 迁移跳过用户 id=${row.id}：username 解密失败（密钥不匹配或数据损坏）`);
+          console.error(`[dsh-access] 迁移跳过用户 id=${row.id}：username 解密失败（密钥不匹配或数据损坏）`);
           continue;
         }
         plain = decrypted;

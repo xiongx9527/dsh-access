@@ -1,7 +1,7 @@
-// dsh 浏览器侧插件：在设置页"插件"列表里注册 dsh-passwords 卡片。
+// dsh 浏览器侧插件：在设置页"插件"列表里注册 dsh-access 卡片。
 // 卡片内容：
 //   - 远程设置补丁状态 + "重载补丁"按钮（任何登录用户可触发；补丁强制启用）
-//   - 用户管理（改密/改名/子用户） → fetch /api/dsh-passwords/*（网关
+//   - 用户管理（改密/改名/子用户） → fetch /api/dsh-access/*（网关
 //     JWT cookie 鉴权）
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
 import type {} from '@deepseek-ai/dsh-client-ui-slots/client';
@@ -191,7 +191,7 @@ export function apply(ctx: ClientContext): void {
     ctx.slots.register(
       {
         name: 'settings.section',
-        id: 'dsh-passwords',
+        id: 'dsh-access',
         order: 10,
         label: () => '访问管理',
         locale: 'dshpw',
@@ -201,7 +201,7 @@ export function apply(ctx: ClientContext): void {
     ),
   );
 
-  ctx.effect(() => installAccessManagementIcon(), 'dsh-passwords: access navigation icon');
+  ctx.effect(() => installAccessManagementIcon(), 'dsh-access: access navigation icon');
 
   // 只有通过登录网关访问时才注册账号入口；3080 直连没有 /gateway/api/me，保持原生界面。
   // 3088 网关中的 Admin 与子用户都 shadow DSH 原生设置入口；3080 直连保持原生设置。
@@ -220,7 +220,7 @@ export function apply(ctx: ClientContext): void {
           ctx.slots.register(
             {
               name: 'sidebar.footer.action',
-              id: 'dsh-passwords-account',
+              id: 'dsh-access-account',
               order: 10_000,
               locale: 'dshpw',
               inject: () => ({}),
@@ -242,11 +242,11 @@ export function apply(ctx: ClientContext): void {
       active = false;
       for (const dispose of disposers) dispose();
     };
-  }, 'dsh-passwords: gateway account and role chrome');
+  }, 'dsh-access: gateway account and role chrome');
 
   ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register(
-      { name: 'shell.overlay', id: 'dsh-passwords-mobile-nav', order: 95, locale: 'dshpw', inject: () => ({}) },
+      { name: 'shell.overlay', id: 'dsh-access-mobile-nav', order: 95, locale: 'dshpw', inject: () => ({}) },
       MobileNavigation,
     ),
   );
@@ -256,7 +256,7 @@ export function apply(ctx: ClientContext): void {
     ctx.slots.register(
       {
         name: 'shell.overlay',
-        id: 'dsh-passwords-chat',
+        id: 'dsh-access-chat',
         order: 100,
         locale: 'dshpw',
         inject: () => ({}),
@@ -266,15 +266,15 @@ export function apply(ctx: ClientContext): void {
   );
 
   // 不可见 token 上报器：会话作用域（conversation.composer.dock 供应 useProjection），
-  // 读取 dsh 的 tokenUsage 投影并把增量上报给密码门，用于子用户每小时 token 配额。
+  // 读取 dsh 的 tokenUsage 投影并把增量上报给访问管理，用于子用户每小时 token 配额。
   ctx.slots.inject('conversation.composer.dock', () =>
     ctx.slots.register(
-      { name: 'conversation.composer.dock', id: 'dsh-passwords-token', order: 90 },
+      { name: 'conversation.composer.dock', id: 'dsh-access-token', order: 90 },
       TokenReporter,
     ),
   );
 
   // 双语词典（zh/en）：卡片文字跟随 dsh 设置里的语言
   // （设置 → 通用 → 语言 / Settings → General → Language），切换即时生效
-  ctx.effect(() => ctx.locale.register('dshpw', { zh, en }), 'dsh-passwords: dicts');
+  ctx.effect(() => ctx.locale.register('dshpw', { zh, en }), 'dsh-access: dicts');
 }

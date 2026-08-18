@@ -1,7 +1,7 @@
 // 极简 ACME v2 客户端（RFC 8555）：HTTP-01 挑战 + ES256 JWS + P-256 密钥。
 // 零外部依赖：node:crypto（密钥/签名/CSR）+ fetch（请求）+ 手写 DER 编码器。
 //
-// 用途：dsh-passwords 的"自动 HTTPS"——网关启动时自动向 Let's Encrypt
+// 用途：dsh-access 的"自动 HTTPS"——网关启动时自动向 Let's Encrypt
 // 申请/续期证书（默认域名为 <公网IP>.sslip.io），用户零操作获得
 // 浏览器信任的 HTTPS。密钥与证书持久化在 <db目录>/acme/ 下：
 //   account.key.pem   账户密钥（P-256，复用于续期）

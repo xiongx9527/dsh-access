@@ -1,7 +1,7 @@
-// dsh 主机侧插件：dsh-passwords 在 dsh 里的"席位"
-//   1. /api/dsh-passwords/* 用户管理路由：改密码、改用户名、
+// dsh 主机侧插件：dsh-access 在 dsh 里的"席位"
+//   1. /api/dsh-access/* 用户管理路由：改密码、改用户名、
 //      主用户分配/删除子用户。走网关 JWT cookie 鉴权。
-//   2. /api/dsh-passwords/patch/* 远程设置补丁路由：
+//   2. /api/dsh-access/patch/* 远程设置补丁路由：
 //      - GET  /patch/status → 补丁当前状态（任何登录用户可看）
 //      - POST /patch/reload → 通知网关重载补丁并重启 dsh 网页服务
 //        （任何登录用户可触发；补丁强制启用，无开关）
@@ -54,7 +54,7 @@ export function remoteAccessAuthorization(caller: AuthedUser | null, directLocal
 }
 
 /** 稳定 cordis 插件名（insert 进 cordis.yml 时用同一个名字） */
-export const name = 'dsh-passwords';
+export const name = 'dsh-access';
 
 /** 依赖 dsh 主机侧的 webServer 服务（路由挂载点） */
 export const inject = ['webServer'];
@@ -180,7 +180,7 @@ function gatewayAlreadyRunning(port: number): Promise<boolean> {
 }
 
 /**
- * 自动拉起外部密码门：dsh 启动时（本插件被加载）spawn 网关子进程，
+ * 自动拉起外部访问管理：dsh 启动时（本插件被加载）spawn 网关子进程，
  * 无需任何额外启动命令。dsh 退出时（ctx.dispose）子进程随停；
  * 网关侧另有父进程看门狗兜底（宿主被强杀时自己退出）。
  */
@@ -225,13 +225,13 @@ async function waitForGatewayPort(port: number, child: ChildProcess, launchError
 }
 
 /**
- * 自动拉起外部密码门，并暴露只管理本插件子进程的重启控制器。
+ * 自动拉起外部访问管理，并暴露只管理本插件子进程的重启控制器。
  * 端口变更时不重启 3080，只替换网关子进程。
  */
 function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
   const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const cliPath = path.join(installRoot, 'dist', 'cli.js');
-  const envPath = process.env.DSH_PASSWORDS_ENV_FILE?.trim() || path.join(installRoot, '.env');
+  const envPath = process.env.DSH_ACCESS_ENV_FILE?.trim() || path.join(installRoot, '.env');
   const detectedDshRoot = findDshRoot(cfg.patch.dshRoot);
   let activePort = cfg.gateway.port;
   let disposed = false;
@@ -258,7 +258,7 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
   const launch = async (port: number): Promise<void> => {
     if (disposed) throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '网关控制器已停止');
     if (!existsSync(cliPath)) {
-      throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '密码门未编译（缺少 dist/cli.js）');
+      throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '访问管理未编译（缺少 dist/cli.js）');
     }
     let upstreamPort = 3080;
     try {
@@ -279,7 +279,7 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
         ...process.env,
         MCP_GATEWAY_PORT: String(port),
         DSH_GATEWAY_PARENT_PID: String(process.pid),
-        DSH_PASSWORDS_ENV_FILE: envPath,
+        DSH_ACCESS_ENV_FILE: envPath,
         MCP_DSH_ROOT: detectedDshRoot ?? '',
       },
       stdio: ['ignore', 'inherit', 'inherit'],
@@ -287,18 +287,18 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
     child = launched;
     launched.once('error', (error) => {
       spawnError = error;
-      console.error('[dsh-passwords] 密码门拉起失败:', error);
+      console.error('[dsh-access] 访问管理拉起失败:', error);
     });
     launched.on('exit', (code, signal) => {
       if (child === launched) child = null;
       if (disposed || expectedStops.has(launched)) return;
       const reason = code ?? signal ?? 'unknown';
       if (reason === EXIT_CERT_FAILED) {
-        console.error('[dsh-passwords] 密码门未启动（错误码 30：HTTPS 证书签发失败）。检查 80/443 端口与网络；或运行 scripts/start-http.mjs 改用明文 HTTP（有被嗅探风险）');
+        console.error('[dsh-access] 访问管理未启动（错误码 30：HTTPS 证书签发失败）。检查 80/443 端口与网络；或运行 scripts/start-http.mjs 改用明文 HTTP（有被嗅探风险）');
       } else if (reason === EXIT_NO_DOMAIN) {
-        console.error('[dsh-passwords] 密码门未启动（错误码 31：无法确定公网 IP/域名）。或运行 scripts/start-http.mjs 改用明文 HTTP（有被嗅探风险）');
+        console.error('[dsh-access] 访问管理未启动（错误码 31：无法确定公网 IP/域名）。或运行 scripts/start-http.mjs 改用明文 HTTP（有被嗅探风险）');
       } else {
-        console.error(`[dsh-passwords] 密码门进程已退出（code=${String(reason)}）。重启 dsh 会自动再次拉起`);
+        console.error(`[dsh-access] 访问管理进程已退出（code=${String(reason)}）。重启 dsh 会自动再次拉起`);
       }
     });
     try {
@@ -316,18 +316,18 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
     () => {
       const noop = () => {};
       if (!existsSync(cliPath)) {
-        console.error('[dsh-passwords] 密码门未编译（缺少 dist/cli.js）：请先到安装目录运行 npm install && npm run build');
+        console.error('[dsh-access] 访问管理未编译（缺少 dist/cli.js）：请先到安装目录运行 npm install && npm run build');
         return noop;
       }
       if (process.env.DSH_PASSWORDS_NO_AUTOSTART === '1') return noop;
       void gatewayAlreadyRunning(activePort).then((running) => {
         if (disposed) return;
         if (running) {
-          console.error(`[dsh-passwords] 密码门已在运行（端口 ${String(activePort)}），跳过自动拉起`);
+          console.error(`[dsh-access] 访问管理已在运行（端口 ${String(activePort)}），跳过自动拉起`);
           return;
         }
         void launch(activePort).catch((error) => {
-          console.error('[dsh-passwords] 密码门启动失败:', error);
+          console.error('[dsh-access] 访问管理启动失败:', error);
         });
       });
       return () => {
@@ -335,7 +335,7 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
         void stopChild();
       };
     },
-    'dsh-passwords: gateway autostart',
+    'dsh-access: gateway autostart',
   );
 
   return {
@@ -376,7 +376,7 @@ export function apply(ctx: Context): void {
       db.init();
       auth = new AuthService(cfg, db);
     } catch (error) {
-      console.error('[dsh-passwords] 网关数据库初始化失败:', error);
+      console.error('[dsh-access] 网关数据库初始化失败:', error);
       db = null;
       auth = null;
     }
@@ -409,7 +409,7 @@ export function apply(ctx: Context): void {
       writeJson(res, 503, {
         ok: false,
         code: 'NOT_CONFIGURED',
-        error: '未配置：请先完成 dsh-passwords 部署（.env 中 SETUP_KEY 等），再重启 dsh',
+        error: '未配置：请先完成 dsh-access 部署（.env 中 SETUP_KEY 等），再重启 dsh',
       });
       return null;
     }
@@ -452,7 +452,7 @@ export function apply(ctx: Context): void {
     ? new RemoteAccessService({ gatewayPort: gatewayRuntime?.port ?? cfg.gateway.port, home: path.dirname(cfg.dbPath) })
     : null;
   if (remoteAccess !== null) {
-    ctx.effect(() => () => { void remoteAccess.close(); }, 'dsh-passwords: remote access cleanup');
+    ctx.effect(() => () => { void remoteAccess.close(); }, 'dsh-access: remote access cleanup');
   }
 
   const requireAdmin = (req: IncomingMessage, res: ServerResponse): AuthedUser | null => {
@@ -478,11 +478,11 @@ export function apply(ctx: Context): void {
     return caller ?? { userId: 0, username: 'admin', role: 'admin' };
   };
 
-  // ── /api/dsh-passwords/* 路由（exact 路由先于连接插件的 /api 前缀命中） ──
+  // ── /api/dsh-access/* 路由（exact 路由先于连接插件的 /api 前缀命中） ──
   const routes: WebRoute[] = [
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/state',
+      path: '/api/dsh-access/state',
       handler: (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -496,7 +496,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/remote-access/status',
+      path: '/api/dsh-access/remote-access/status',
       handler: async (req, res) => {
         if (!requireAdmin(req, res)) return;
         if (req.method !== 'GET') {
@@ -520,7 +520,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/remote-access/tunnel/start',
+      path: '/api/dsh-access/remote-access/tunnel/start',
       handler: async (req, res) => {
         if (!requireAdmin(req, res)) return;
         if (req.method !== 'POST') {
@@ -539,7 +539,7 @@ export function apply(ctx: Context): void {
           }
           await remoteAccess.setGatewayPort(port);
           void remoteAccess.startTunnel().catch((error) => {
-            console.error('[dsh-passwords] 临时隧道启动失败:', error);
+            console.error('[dsh-access] 临时隧道启动失败:', error);
           });
           await new Promise((resolve) => setTimeout(resolve, 0));
           writeJson(res, 202, { ok: true, ...remoteAccess.statusSnapshot(true) });
@@ -550,7 +550,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/remote-access/tunnel/stop',
+      path: '/api/dsh-access/remote-access/tunnel/stop',
       handler: async (req, res) => {
         if (!requireAdmin(req, res)) return;
         if (req.method !== 'POST') {
@@ -563,7 +563,7 @@ export function apply(ctx: Context): void {
         }
         try {
           void remoteAccess.stopTunnel().catch((error) => {
-            console.error('[dsh-passwords] 临时隧道停止失败:', error);
+            console.error('[dsh-access] 临时隧道停止失败:', error);
           });
           await new Promise((resolve) => setTimeout(resolve, 0));
           writeJson(res, 202, { ok: true, ...remoteAccess.statusSnapshot(true) });
@@ -574,7 +574,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/gateway/config',
+      path: '/api/dsh-access/gateway/config',
       handler: async (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -646,7 +646,7 @@ export function apply(ctx: Context): void {
             try {
               await gatewayRuntime.restart(previousPort);
             } catch (rollbackError) {
-              console.error('[dsh-passwords] 网关端口回滚失败:', rollbackError);
+              console.error('[dsh-access] 网关端口回滚失败:', rollbackError);
             }
             const code = error instanceof Error && 'code' in error ? String((error as Error & { code: unknown }).code) : 'GATEWAY_RESTART_FAILED';
             writeJson(res, code === 'PORT_IN_USE' ? 409 : 500, {
@@ -666,7 +666,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/overview',
+      path: '/api/dsh-access/overview',
       handler: (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -713,7 +713,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/permissions',
+      path: '/api/dsh-access/permissions',
       handler: async (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -794,7 +794,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/password',
+      path: '/api/dsh-access/password',
       handler: async (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -812,7 +812,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/username',
+      path: '/api/dsh-access/username',
       handler: async (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -830,7 +830,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/users',
+      path: '/api/dsh-access/users',
       handler: async (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -848,7 +848,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/users/remove',
+      path: '/api/dsh-access/users/remove',
       handler: async (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -865,7 +865,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/patch/status',
+      path: '/api/dsh-access/patch/status',
       handler: (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -880,7 +880,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/patch/reload',
+      path: '/api/dsh-access/patch/reload',
       handler: (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -891,7 +891,7 @@ export function apply(ctx: Context): void {
     },
     {
       kind: 'exact',
-      path: '/api/dsh-passwords/workspaces',
+      path: '/api/dsh-access/workspaces',
       handler: (req, res) => {
         const caller = guard(req, res);
         if (!caller) return;
@@ -916,7 +916,7 @@ export function apply(ctx: Context): void {
         for (const dispose of disposers) dispose();
       };
     },
-    'dsh-passwords: user management routes',
+    'dsh-access: user management routes',
   );
 
 }

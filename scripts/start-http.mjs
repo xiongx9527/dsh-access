@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// dsh-passwords 明文 HTTP 模式启动脚本（危险，仅限本地/内网）
+// dsh-access 明文 HTTP 模式启动脚本（危险，仅限本地/内网）
 //
 // 用法:
 //   node scripts/start-http.mjs [端口]      # 默认 8080
 //
-// 背景：密码门默认要求自动 HTTPS（Let's Encrypt），公网 IP/域名拿不到时
+// 背景：访问管理默认要求自动 HTTPS（Let's Encrypt），公网 IP/域名拿不到时
 // 会拒绝启动（错误码 30/31），绝不静默降级为明文。确实只能在内网/本地
 // 使用、且接受明文传输风险的用户，用本脚本显式确认后以 HTTP 启动。
 import { spawn } from 'node:child_process';
@@ -45,7 +45,7 @@ for (const line of warnLines) console.error(line);
 
 const prompt = isEn
   ? `Start the gateway in HTTP mode on port ${port}? Type y to continue [y/N] `
-  : `确认以 HTTP 模式启动密码门（端口 ${port}）？输入 y 继续 [y/N] `;
+  : `确认以 HTTP 模式启动访问管理（端口 ${port}）？输入 y 继续 [y/N] `;
 
 const rl = createInterface({ input: process.stdin, output: process.stderr });
 rl.question(prompt, (answer) => {

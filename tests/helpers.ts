@@ -31,7 +31,7 @@ export function testConfig(dbPath: string): PlatformConfig {
 }
 
 export function createAuthFixture(): { db: Database; auth: AuthService; config: PlatformConfig } {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-passwords-ext-auth-'));
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-auth-'));
   const config = testConfig(path.join(dir, 'platform.db'));
   const db = new Database(config.dbPath, createFieldCrypto(config.dbEncKey, config.setupKey));
   db.init();

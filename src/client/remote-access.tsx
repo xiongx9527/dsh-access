@@ -42,7 +42,7 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState('');
 
-  const refresh = () => remoteApi('/api/dsh-passwords/remote-access/status')
+  const refresh = () => remoteApi('/api/dsh-access/remote-access/status')
     .then((next) => { setStatus(next); setError(''); })
     .catch((reason) => { setStatus(null); setError(reason instanceof Error ? reason.message : String(reason)); });
 
@@ -57,7 +57,7 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
     setBusy(true);
     setError('');
     try {
-      setStatus(await remoteApi(`/api/dsh-passwords/remote-access/tunnel/${start ? 'start' : 'stop'}`, 'POST'));
+      setStatus(await remoteApi(`/api/dsh-access/remote-access/tunnel/${start ? 'start' : 'stop'}`, 'POST'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
       void refresh();

@@ -1,11 +1,11 @@
 // 构建浏览器侧插件包：esbuild 把 src/client/* 打成 CJS，
 // 再包成 dsh 客户端模块系统要求的 __ModuleLoader__.load 工厂格式
 // （classic script + factory(require)，与 @linxin666 插件产物同构）。
-// 产物：dist/client.js（dsh 通过 /plugins/dsh-passwords/client.js 分发）。
+// 产物：dist/client.js（dsh 通过 /plugins/dsh-access/client.js 分发）。
 import { build } from 'esbuild';
 import { writeFileSync } from 'node:fs';
 
-const PACKAGE_ID = 'dsh-passwords';
+const PACKAGE_ID = 'dsh-access';
 
 const result = await build({
   entryPoints: ['src/client/index.tsx'],

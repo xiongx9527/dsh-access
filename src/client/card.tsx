@@ -1,7 +1,7 @@
 // 访问管理设置页：进入后直接展示完整内容，不再折叠。内容：
 //   - 远程设置补丁：状态 + "重载补丁"按钮（任何登录用户可触发；补丁强制启用）
 //   - 用户管理：改密/改名/子用户分配（主用户 admin 可管理所有，子用户只能改自己）
-// 数据面：/api/dsh-passwords/*（网关注入的 JWT cookie 鉴权）。
+// 数据面：/api/dsh-access/*（网关注入的 JWT cookie 鉴权）。
 //
 // 语言：卡片词典注册在 locale 命名空间 'dshpw'（见 locales.ts），文字跟随
 // dsh 设置里的语言（Settings → General → Language）。t seat 由注册时的
@@ -178,18 +178,18 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
         gatewayIdentityRouteAvailable(response.headers.get('content-type')),
       ))
       .catch(() => setGatewayRouteAvailable(null));
-    api<StateData>('/api/dsh-passwords/state')
+    api<StateData>('/api/dsh-access/state')
       .then((d) => {
         setData(d);
         setError('');
         if (d.me?.role === 'admin') {
-          api<GatewayConfig>('/api/dsh-passwords/gateway/config')
+          api<GatewayConfig>('/api/dsh-access/gateway/config')
             .then((gateway) => {
               setGatewayConfig(gateway);
               setGatewayPortDraft(String(gateway.port));
             })
             .catch(() => setGatewayConfig(null));
-          api<PermOverview>('/api/dsh-passwords/overview')
+          api<PermOverview>('/api/dsh-access/overview')
             .then((o) => {
               setOverview(o);
               const drafts: Record<number, PermDraft> = {};
@@ -207,7 +207,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
                 }
               }
               setPermDrafts(drafts);
-              api<{ workspaces: Array<{ path: string; title: string }> }>('/api/dsh-passwords/workspaces')
+              api<{ workspaces: Array<{ path: string; title: string }> }>('/api/dsh-access/workspaces')
                 .then((r) => setWorkspaces(r.workspaces ?? []))
                 .catch(() => setWorkspaces([]));
             })
@@ -215,7 +215,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
         }
       })
       .catch((e) => setError(errText(e, t)));
-    api<{ status: PatchState | null }>('/api/dsh-passwords/patch/status')
+    api<{ status: PatchState | null }>('/api/dsh-access/patch/status')
       .then((r) => setPatchState(r.status))
       .catch(() => setPatchState(null));
   };
@@ -247,7 +247,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
   /** 重载补丁：任何登录用户可触发；网关重打补丁并重启 dsh 网页服务，页面稍后自动刷新 */
   const reloadPatch = () => {
     void run(async () => {
-      await api('/api/dsh-passwords/patch/reload', {});
+      await api('/api/dsh-access/patch/reload', {});
       // 给网关留出应用补丁 + 重启 dsh 的时间，再刷新页面拿到新代码
       window.setTimeout(() => {
         window.location.reload();
@@ -262,7 +262,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
       return;
     }
     void run(async () => {
-      const updated = await api<GatewayConfig>('/api/dsh-passwords/gateway/config', { port: gatewayPortDraft });
+      const updated = await api<GatewayConfig>('/api/dsh-access/gateway/config', { port: gatewayPortDraft });
       setGatewayConfig(updated);
       setGatewayPortDraft(String(updated.port));
       const view = gatewaySaveViewState(remoteRefreshKey);
@@ -279,7 +279,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
     if (pwNew !== pwConfirm) return setError(t('pwMismatch'));
     if (!PASSWORD_RE.test(pwNew)) return setError(t('pwPolicy'));
     void run(
-      () => api('/api/dsh-passwords/password', { target: pwTarget || me, currentPassword: pwCurrent, password: pwNew }),
+      () => api('/api/dsh-access/password', { target: pwTarget || me, currentPassword: pwCurrent, password: pwNew }),
       t('pwChanged'),
     );
   };
@@ -287,7 +287,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
   const rename = () => {
     if (!USERNAME_RE.test(nameNew)) return setError(t('namePolicy'));
     void run(
-      () => api('/api/dsh-passwords/username', { target: nameTarget || me, username: nameNew }),
+      () => api('/api/dsh-access/username', { target: nameTarget || me, username: nameNew }),
       t('nameChanged'),
     );
   };
@@ -295,12 +295,12 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
   const addSubUser = () => {
     if (!USERNAME_RE.test(addName)) return setError(t('namePolicy'));
     if (!PASSWORD_RE.test(addPw)) return setError(t('pwPolicy'));
-    void run(() => api('/api/dsh-passwords/users', { username: addName, password: addPw }), t('subCreated'));
+    void run(() => api('/api/dsh-access/users', { username: addName, password: addPw }), t('subCreated'));
   };
 
   const removeUser = (username: string) => {
     if (!window.confirm(t('delConfirm', { username }))) return;
-    void run(() => api('/api/dsh-passwords/users/remove', { target: username }), t('deleted'));
+    void run(() => api('/api/dsh-access/users/remove', { target: username }), t('deleted'));
   };
 
   // 权限草稿更新 + 保存（仅主用户）
@@ -313,7 +313,7 @@ export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
     if (!d) return;
     void run(
       () =>
-        api('/api/dsh-passwords/permissions', {
+        api('/api/dsh-access/permissions', {
           userId,
           allowedFolders: d.folders,
           hourlyTokenLimit: d.token.trim() === '' ? null : Number(d.token),

@@ -384,7 +384,7 @@ acceptance:
       truncated: false
   - id: A40
     source: specs/remote-access/spec.md
-    text: "`GET /api/dsh-passwords/remote-access/status`"
+    text: "`GET /api/dsh-access/remote-access/status`"
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -393,7 +393,7 @@ acceptance:
       truncated: false
   - id: A41
     source: specs/remote-access/spec.md
-    text: "`POST /api/dsh-passwords/remote-access/tunnel/start`"
+    text: "`POST /api/dsh-access/remote-access/tunnel/start`"
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -402,7 +402,7 @@ acceptance:
       truncated: false
   - id: A42
     source: specs/remote-access/spec.md
-    text: "`POST /api/dsh-passwords/remote-access/tunnel/stop`"
+    text: "`POST /api/dsh-access/remote-access/tunnel/stop`"
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -609,7 +609,7 @@ acceptance:
       truncated: false
   - id: A65
     source: specs/remote-access/spec.md
-    text: 安装 `dsh-passwords-ext` 后不要求安装 `dsh-pocket`。
+    text: 安装 `dsh-access` 后不要求安装 `dsh-pocket`。
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using

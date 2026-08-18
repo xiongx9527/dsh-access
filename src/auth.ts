@@ -29,7 +29,7 @@ const IP_MAX_FAILED = 30;
 const IP_WINDOW_MS = 15 * 60 * 1000;
 const IP_THROTTLE_MINUTES = 30;
 /** 时序均衡用空跑哈希：用户不存在时也执行一次 bcrypt，抹平“快=不存在”的枚举差异 */
-const DUMMY_HASH = bcrypt.hashSync('dsh-passwords-timing-equalizer', BCRYPT_ROUNDS);
+const DUMMY_HASH = bcrypt.hashSync('dsh-access-timing-equalizer', BCRYPT_ROUNDS);
 
 export class AuthError extends Error {
   constructor(

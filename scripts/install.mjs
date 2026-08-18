@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// dsh-passwords 一键安装（跨平台核心逻辑；install.sh / install.bat 只是引导壳）
+// dsh-access 一键安装（跨平台核心逻辑；install.sh / install.bat 只是引导壳）
 //
 // 做的事：环境检查（node/dsh/pnpm）→ 装依赖 + 编译 → 生成随机 SETUP_KEY
 // → 写 .env 和 setup-key.txt（用完即删）→ 精确注册为 dsh 插件
-// （此后启动 dsh 会自动拉起密码门）→ 应用远程设置补丁。
+// （此后启动 dsh 会自动拉起访问管理）→ 应用远程设置补丁。
 // 幂等：已存在 .env 不覆盖，插件已注册不重复加。
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
@@ -17,8 +17,8 @@ const CYAN = isWin ? '' : '\x1b[1;36m';
 const RED = isWin ? '' : '\x1b[1;31m';
 const RESET = isWin ? '' : '\x1b[0m';
 
-const say = (msg) => console.log(`${CYAN}[dsh-passwords]${RESET} ${msg}`);
-const err = (msg) => console.error(`${RED}[dsh-passwords]${RESET} ${msg}`);
+const say = (msg) => console.log(`${CYAN}[dsh-access]${RESET} ${msg}`);
+const err = (msg) => console.error(`${RED}[dsh-access]${RESET} ${msg}`);
 
 /** 以 shell 方式跑一条命令（Windows 用 cmd，其余用 sh），返回退出码 */
 function run(cmd, { quiet = false, env } = {}) {
@@ -104,7 +104,7 @@ if (setupKey !== '') {
   writeFileSync(
     keyFile,
     [
-      'dsh-passwords 首次配置密钥',
+      'dsh-access 首次配置密钥',
       '========================',
       '',
       `SETUP_KEY = ${setupKey}`,
@@ -122,14 +122,14 @@ if (setupKey !== '') {
   say(`密钥已写入 ${keyFile}（初始化完成后请删除）`);
 }
 
-// ── 7. 注册为 dsh 插件（此后 dsh web 启动会自动拉起密码门） ──
+// ── 7. 注册为 dsh 插件（此后 dsh web 启动会自动拉起访问管理） ──
 say('注册 dsh 插件（profile: web）…');
 if (run(`"${process.execPath}" "${path.join(root, 'scripts', 'register-plugin.mjs')}"`) !== 0) {
   err('插件注册失败（pnpm 安装 profile 依赖出错），可手动运行上面的脚本排查');
   process.exit(1);
 }
 
-// ── 8. 应用远程设置补丁（让经密码门登录的远程浏览器可用 dsh 设置） ──
+// ── 8. 应用远程设置补丁（让经访问管理登录的远程浏览器可用 dsh 设置） ──
 say('应用远程设置补丁…');
 const patchResult = spawnSync(
   process.execPath,
@@ -141,7 +141,7 @@ const patchResult = spawnSync(
   },
 );
 if (patchResult.status !== 0) {
-  say('补丁暂时无法应用（未找到 dsh 安装目录），密码门启动时会自动重试');
+  say('补丁暂时无法应用（未找到 dsh 安装目录），访问管理启动时会自动重试');
 } else {
   say('补丁已应用');
 }
@@ -156,7 +156,7 @@ say(`      （同时保存在 ${path.join(root, 'setup-key.txt')}，初始化完
 say('');
 say('  接下来 3 步：');
 say('    1) 用平时的方式启动 dsh（例如：DEEPSEEK_API_KEY=sk-你的key dsh web）');
-say('       ——密码门会被自动拉起，不需要额外启动命令');
+say('       ——访问管理会被自动拉起，不需要额外启动命令');
 say('    2) 浏览器打开 https://<服务器IP>.sslip.io');
 say('       （首次会自动进入配置页），输入上面的 SETUP_KEY，创建主用户');
 say('    3) 之后所有人访问 https://<服务器IP>.sslip.io 都会先过登录页');

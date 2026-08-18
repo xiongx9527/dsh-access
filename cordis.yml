@@ -1,7 +1,7 @@
-# DeepSeek Harness 接入 dsh-passwords 的 patch 配置
+# DeepSeek Harness 接入 dsh-access 的 patch 配置
 #
 # 推荐安装方式（install.sh 已自动完成）：
-#   dsh plugin --profile web add link:/path/to/dsh-passwords
+#   dsh plugin --profile web add link:/path/to/dsh-access
 # 本包声明了 dsh.bundle.patch，注册后此文件会作为 bundle 层被 dsh 自动应用，
 # 启动 dsh 无需任何额外参数。
 #
@@ -25,7 +25,7 @@
     # 前端：应用内选择工作区目录对话框
     - id: ui-directory-picker-browse
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
-    # dsh-passwords 主机侧插件：设置命名空间 + 用户管理路由
-    # （需把本项目加入 dsh profile 依赖：pnpm add /opt/dsh-passwords）
-    - id: dsh-passwords
-      name: 'dsh-passwords'
+    # dsh-access 主机侧插件：设置命名空间 + 用户管理路由
+    # （需把本项目加入 dsh profile 依赖：pnpm add /opt/dsh-access）
+    - id: dsh-access
+      name: 'dsh-access'

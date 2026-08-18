@@ -1,6 +1,6 @@
 # Outcome
 
-在 `dsh-passwords-ext` 内提供统一的远程访问能力：Passwords 设置卡片保留公共状态与网关端口配置，并拆成“账号与权限”和“远程访问”两个 Tab；所有局域网二维码和 Cloudflare 临时隧道都指向 Passwords 登录网关，访问前必须登录，不再依赖或暴露独立的 Pocket 3081 入口。
+在 `dsh-access` 内提供统一的远程访问能力：Passwords 设置卡片保留公共状态与网关端口配置，并拆成“账号与权限”和“远程访问”两个 Tab；所有局域网二维码和 Cloudflare 临时隧道都指向 Passwords 登录网关，访问前必须登录，不再依赖或暴露独立的 Pocket 3081 入口。
 
 # Scope
 
@@ -50,8 +50,8 @@
 - Node.js 版本要求保持 `>=22.5`。
 - Passwords 网关是唯一远程入口；3080 保持 loopback，3081 不由本插件监听。
 - 所有远程访问必须经过现有 JWT、凭据版本、封禁、删除、请求策略和连接撤销逻辑。
-- 远程访问管理 API 使用 `/api/dsh-passwords/remote-access/*` 命名空间并仅允许 Admin。
-- 网关端口仍由现有 `/api/dsh-passwords/gateway/config` 写入和 `GatewayRuntime.restart(port)` 应用。
+- 远程访问管理 API 使用 `/api/dsh-access/remote-access/*` 命名空间并仅允许 Admin。
+- 网关端口仍由现有 `/api/dsh-access/gateway/config` 写入和 `GatewayRuntime.restart(port)` 应用。
 - 远程模块必须与 `src/gateway.ts`、账号管理和工作区策略解耦，避免继续扩大核心代理文件。
 - 二维码仅编码 URL，不承担认证功能。
 - cloudflared 文件和运行状态只保存在 Passwords 数据目录内。
@@ -69,7 +69,7 @@
 
 # Open questions
 
-- 无。用户已确认最终原型、双 Tab、账号内容保留、端口变化刷新行为，并明确要求在 `dsh-passwords-ext` 中实现。
+- 无。用户已确认最终原型、双 Tab、账号内容保留、端口变化刷新行为，并明确要求在 `dsh-access` 中实现。
 
 # Verification expectations
 

@@ -110,7 +110,7 @@ export class RemoteAccessService {
     const lanIp = selectLanIPv4(this.networkInterfacesFn());
     const lanUrl = lanIp ? `http://${lanIp}:${String(this.gatewayPort)}` : null;
     const tunnel = this.tunnel.snapshot();
-    console.error('[dsh-passwords] remote service status qr done');
+    console.error('[dsh-access] remote service status qr done');
     return {
       gatewayPort: this.gatewayPort,
       gatewayRunning,

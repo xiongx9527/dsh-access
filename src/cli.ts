@@ -45,7 +45,7 @@ function parseCliOverrides(argv: string[]): CliOverrides {
   const take = (index: number, name: string): string | null => {
     const next = argv[index + 1];
     if (next === undefined || next.startsWith('--')) {
-      console.error(`[dsh-passwords] ${tr('cli.warnMissingValue', { name })}`);
+      console.error(`[dsh-access] ${tr('cli.warnMissingValue', { name })}`);
       return null;
     }
     return next;
@@ -58,7 +58,7 @@ function parseCliOverrides(argv: string[]): CliOverrides {
       if (arg === '--port') {
         const port = Number(value);
         if (!Number.isInteger(port) || port < 0 || port > 65535) {
-          console.error(`[dsh-passwords] ${tr('cli.warnInvalidPort', { value })}`);
+          console.error(`[dsh-access] ${tr('cli.warnInvalidPort', { value })}`);
         } else {
           out.port = port;
         }
@@ -107,7 +107,7 @@ function runPatch(argv: string[]): void {
   const config = loadConfig();
   const root = findDshRoot(config.patch.dshRoot);
   if (!root) {
-    console.error(`[dsh-passwords] ${tr('cli.noDshRoot')}`);
+    console.error(`[dsh-access] ${tr('cli.noDshRoot')}`);
     process.exit(1);
   }
   console.log(`${tr('cli.dshDir')}: ${root}`);
@@ -156,7 +156,7 @@ function runPatch(argv: string[]): void {
 async function boot() {
   const config = loadConfig();
   if (!config.setupKey || config.setupKey === 'change-me-to-a-strong-random-key') {
-    console.error(`[dsh-passwords] ${tr('cli.needSetupKey')}`);
+    console.error(`[dsh-access] ${tr('cli.needSetupKey')}`);
     process.exit(1);
   }
 
@@ -168,7 +168,7 @@ async function boot() {
   if (cli.upstream !== undefined) config.gateway.upstream = cli.upstream;
 
   // ── 自动 HTTPS：域名补全（零配置探测公网 IP → <IP>.sslip.io）+ 端口默认 ──
-  // 失败即拒绝启动（fail-closed）：密码门绝不静默降级为明文 HTTP。
+  // 失败即拒绝启动（fail-closed）：访问管理绝不静默降级为明文 HTTP。
   // 需要 HTTP 的用户必须显式关闭（MCP_GATEWAY_AUTO_TLS=0）或走 scripts/start-http.mjs。
   const portExplicit = cli.port !== undefined || process.env.MCP_GATEWAY_PORT !== undefined;
   if (config.gateway.autoTls) {
@@ -177,8 +177,8 @@ async function boot() {
       if (ip !== null) {
         config.gateway.domain = `${ip}.sslip.io`;
       } else {
-        console.error(`[dsh-passwords] ${tr('cli.exitNoDomain', { code: 31 })}`);
-        console.error(`[dsh-passwords] ${tr('cli.exitNoDomainHint')}`);
+        console.error(`[dsh-access] ${tr('cli.exitNoDomain', { code: 31 })}`);
+        console.error(`[dsh-access] ${tr('cli.exitNoDomainHint')}`);
         process.exit(31);
       }
     }
@@ -191,16 +191,16 @@ async function boot() {
     if (root) {
       const result = applyRemotePatch(root);
       if (result === 'applied') {
-        console.error(`[dsh-passwords] ${tr('cli.patchApplied')}`);
+        console.error(`[dsh-access] ${tr('cli.patchApplied')}`);
         if (config.patch.restartService) restartDshWeb(config.patch.restartService, 2500);
       } else if (result === 'missing') {
-        console.error(`[dsh-passwords] ${tr('cli.patchTargetMissing')}`);
+        console.error(`[dsh-access] ${tr('cli.patchTargetMissing')}`);
       }
     } else if (config.patch.dshRoot) {
-      console.error(`[dsh-passwords] ${tr('cli.dshRootMissing')}`);
+      console.error(`[dsh-access] ${tr('cli.dshRootMissing')}`);
     }
   } catch (error) {
-    console.error(`[dsh-passwords] ${tr('cli.patchSyncFailed')}:`, error);
+    console.error(`[dsh-access] ${tr('cli.patchSyncFailed')}:`, error);
   }
 
   const db = new Database(config.dbPath, createFieldCrypto(config.dbEncKey, config.setupKey));
@@ -214,11 +214,11 @@ async function boot() {
   const redirect = createRedirectServer(config, challengeStore);
   if (redirect !== null) {
     redirect.on('error', (error) => {
-      console.error(`[dsh-passwords] ${tr('cli.redirect')}: ${String(error)}`);
+      console.error(`[dsh-access] ${tr('cli.redirect')}: ${String(error)}`);
     });
     redirect.listen(config.gateway.redirectPort!, config.gateway.host, () => {
       console.error(
-        `[dsh-passwords] ${tr('cli.redirect')}: http://${config.gateway.host}:${config.gateway.redirectPort} → 301 https://…`,
+        `[dsh-access] ${tr('cli.redirect')}: http://${config.gateway.host}:${config.gateway.redirectPort} → 301 https://…`,
       );
     });
   }
@@ -226,7 +226,7 @@ async function boot() {
   // ── 自动 HTTPS：申请/续期证书（签发失败 → 拒绝启动，错误码 30） ──
   if (config.gateway.autoTls && config.gateway.tls !== null && challengeStore !== undefined) {
     const acmeDir = path.dirname(config.gateway.tls.cert);
-    console.error(`[dsh-passwords] ${tr('cli.acmeIssuing', { domain: config.gateway.domain })}`);
+    console.error(`[dsh-access] ${tr('cli.acmeIssuing', { domain: config.gateway.domain })}`);
     try {
       const result = await ensureCertificate({
         domain: config.gateway.domain,
@@ -236,19 +236,19 @@ async function boot() {
         challengeStore,
       });
       console.error(
-        `[dsh-passwords] ${tr('cli.acmeIssued', { domain: config.gateway.domain, date: new Date(result.expiresAt).toISOString() })}`,
+        `[dsh-access] ${tr('cli.acmeIssued', { domain: config.gateway.domain, date: new Date(result.expiresAt).toISOString() })}`,
       );
     } catch (error) {
       const oldExpiry = certExpiryMs(config.gateway.tls.cert);
       if (oldExpiry !== null && oldExpiry > Date.now()) {
         // 现有证书仍在有效期内（例如续期因网络抖动失败）：继续用它，后台定时重试续期
-        console.error(`[dsh-passwords] ${tr('cli.acmeFallbackOld')}: ${String(error)}`);
+        console.error(`[dsh-access] ${tr('cli.acmeFallbackOld')}: ${String(error)}`);
       } else {
         // 没有可用证书 → 拒绝启动，绝不静默降级为明文 HTTP
         console.error(
-          `[dsh-passwords] ${tr('cli.exitCertFailed', { code: 30, error: String(error) })}`,
+          `[dsh-access] ${tr('cli.exitCertFailed', { code: 30, error: String(error) })}`,
         );
-        console.error(`[dsh-passwords] ${tr('cli.exitCertHint')}`);
+        console.error(`[dsh-access] ${tr('cli.exitCertHint')}`);
         process.exit(30);
       }
     }
@@ -268,10 +268,10 @@ async function boot() {
               challengeStore,
             });
             console.error(
-              `[dsh-passwords] ${tr('cli.acmeIssued', { domain: config.gateway.domain, date: new Date(result.expiresAt).toISOString() })}`,
+              `[dsh-access] ${tr('cli.acmeIssued', { domain: config.gateway.domain, date: new Date(result.expiresAt).toISOString() })}`,
             );
           } catch (error) {
-            console.error(`[dsh-passwords] ${tr('cli.acmeRenewFailed')}: ${String(error)}`);
+            console.error(`[dsh-access] ${tr('cli.acmeRenewFailed')}: ${String(error)}`);
           }
         })();
       }, 24 * 3600 * 1000);
@@ -283,36 +283,36 @@ async function boot() {
 
   // 端口被占用等监听失败：给出错误码退出（不崩溃在未处理的 error 事件上）
   gateway.on('error', (error) => {
-    console.error(`[dsh-passwords] ${tr('cli.exitPortBusy', { code: 32, error: String(error) })}`);
+    console.error(`[dsh-access] ${tr('cli.exitPortBusy', { code: 32, error: String(error) })}`);
     process.exit(32);
   });
 
   gateway.listen(config.gateway.port, config.gateway.host, () => {
     console.error(
-      `[dsh-passwords] ${tr('cli.gatewayListening', { mode: tlsOn ? 'HTTPS' : 'HTTP' })}: ${tlsOn ? 'https' : 'http'}://${config.gateway.host}:${config.gateway.port} → ${tr('cli.upstream')} ${config.gateway.upstream}`,
+      `[dsh-access] ${tr('cli.gatewayListening', { mode: tlsOn ? 'HTTPS' : 'HTTP' })}: ${tlsOn ? 'https' : 'http'}://${config.gateway.host}:${config.gateway.port} → ${tr('cli.upstream')} ${config.gateway.upstream}`,
     );
-    console.error(`[dsh-passwords] ${tr('cli.db')}: ${config.dbPath}`);
+    console.error(`[dsh-access] ${tr('cli.db')}: ${config.dbPath}`);
     if (!tlsOn) {
       // 显式关闭自动 HTTPS 才走得到这里：给出醒目危险提示
-      console.error(`[dsh-passwords] ${tr('cli.httpWarning')}`);
+      console.error(`[dsh-access] ${tr('cli.httpWarning')}`);
     }
     if (tlsOn && config.gateway.autoTls && config.gateway.domain !== '') {
       console.error(
-        `[dsh-passwords] ${tr('cli.publicUrl')}: https://${config.gateway.domain}${config.gateway.port === 443 ? '' : `:${config.gateway.port}`}`,
+        `[dsh-access] ${tr('cli.publicUrl')}: https://${config.gateway.domain}${config.gateway.port === 443 ? '' : `:${config.gateway.port}`}`,
       );
     }
   });
 
   // ── 父进程看门狗：由 dsh 插件拉起时（DSH_GATEWAY_PARENT_PID），
-  // 宿主 dsh 退出后密码门随之停止，避免残留进程占用端口 ──
+  // 宿主 dsh 退出后访问管理随之停止，避免残留进程占用端口 ──
   const parentPid = Number(process.env.DSH_GATEWAY_PARENT_PID ?? '');
   if (Number.isInteger(parentPid) && parentPid > 0) {
-    console.error(`[dsh-passwords] ${tr('cli.watchParent', { pid: parentPid })}`);
+    console.error(`[dsh-access] ${tr('cli.watchParent', { pid: parentPid })}`);
     setInterval(() => {
       try {
         process.kill(parentPid, 0);
       } catch {
-        console.error(`[dsh-passwords] ${tr('cli.parentGone')}`);
+        console.error(`[dsh-access] ${tr('cli.parentGone')}`);
         process.exit(0);
       }
     }, 3000);
@@ -337,7 +337,7 @@ const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 function runInstall(): void {
   const script = path.join(PACKAGE_ROOT, 'scripts', 'install.mjs');
   if (!existsSync(script)) {
-    console.error(`[dsh-passwords] ${tr('cli.installScriptMissing', { path: script })}`);
+    console.error(`[dsh-access] ${tr('cli.installScriptMissing', { path: script })}`);
     process.exit(1);
   }
   const result = spawnSync(process.execPath, [script], {
@@ -365,11 +365,11 @@ if (process.argv[2] === '--version' || process.argv[2] === '-v' || process.argv[
   runPatch(process.argv.slice(3));
 } else if (process.argv[2] === undefined || process.argv[2] === 'serve-gateway' || process.argv[2] === 'serve') {
   boot().catch((error) => {
-    console.error(`[dsh-passwords] ${tr('cli.startFailed')}:`, error);
+    console.error(`[dsh-access] ${tr('cli.startFailed')}:`, error);
     process.exit(1);
   });
 } else {
   // 未知子命令：报 usage 而不是静默启动网关（拼错命令不会误开服务）
-  console.error(`[dsh-passwords] ${tr('cli.usage')}`);
+  console.error(`[dsh-access] ${tr('cli.usage')}`);
   process.exit(1);
 }

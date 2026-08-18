@@ -331,7 +331,7 @@ acceptance:
     reason: null
   - id: A59
     source: specs/multi-user-gateway/spec.md
-    text: "`dsh-passwords-ext` 自身的账户与网关管理使用独立账户入口，不依赖子用户不可见的 DSH 原生设置页面。"
+    text: "`dsh-access` 自身的账户与网关管理使用独立账户入口，不依赖子用户不可见的 DSH 原生设置页面。"
     result: pending
     reason: null
   - id: A60
@@ -357,7 +357,7 @@ acceptance:
     reason: null
   - id: A64
     source: specs/multi-user-gateway/spec.md
-    text: 原版 dsh-passwords 数据库可在不重建账号的情况下升级使用。
+    text: 原版 dsh-access 数据库可在不重建账号的情况下升级使用。
     result: pending
     reason: null
   - id: A65

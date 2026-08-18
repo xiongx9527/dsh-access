@@ -6,7 +6,7 @@
 //   - dailyMinutesLimit 每日使用时长上限，分钟（从当天首次使用起算；null = 不限）
 //   - allowUpload       是否允许上传文件
 //   - allowGitDownload  是否允许 git 下载（clone/pull 等）
-//   - banned            是否封禁（封禁后经密码门的请求全部 403）
+//   - banned            是否封禁（封禁后经访问管理的请求全部 403）
 //
 // 说明：folder / upload / git 的网关层拦截是"尽力而为"（基于 dsh 的 HTTP API
 // 路径与请求体字段）。主用户账号不受任何限制。

@@ -37,7 +37,7 @@ export function classifyGatewayRequest(
   if (role === 'admin') return { allowed: true };
   const upperMethod = method.toUpperCase();
   if (upperMethod === 'GET' || upperMethod === 'HEAD' || upperMethod === 'OPTIONS') return { allowed: true };
-  if (pathname.startsWith('/api/dsh-passwords/')) return { allowed: true };
+  if (pathname.startsWith('/api/dsh-access/')) return { allowed: true };
   if (pathname.startsWith('/aionui-panel/')) return { allowed: true };
   if (!pathname.startsWith('/api/')) return { allowed: false, reason: 'unknown-mutation' };
 

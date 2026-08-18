@@ -9,7 +9,7 @@
 // 网关把 Host/Origin 改写为 127.0.0.1:3080，主机侧栅栏对经网关的流量放行，
 // 所以只需把客户端持久化强制为 host 模式 + 把插件命名空间加进白名单。
 //
-// 信任边界：只有通过密码门登录的浏览器能写设置（直连 3080 的局域网浏览器
+// 信任边界：只有通过访问管理登录的浏览器能写设置（直连 3080 的局域网浏览器
 // 仍会被主机侧栅栏拒绝）。无论本地直连还是远程，强制打此补丁影响都不大，
 // 因此不提供开关：网关每次启动自动应用（幂等），dsh 升级覆盖文件后重启
 // 网关自动重打，或在设置页点"重载补丁"。
@@ -50,7 +50,7 @@ const WL_NAMESPACES = [
   'live-stats',
   'remote-web-ui',
   'skin-background',
-  'dsh-passwords',
+  'dsh-access',
 ];
 
 function hasPatchTargets(installRoot: string): boolean {
@@ -112,7 +112,7 @@ export function patchStatus(dshRoot: string): { settingsHostMode: boolean; white
   } catch { /* 文件缺失按未打处理 */ }
   try {
     const w = readFileSync(wlFile, 'utf8');
-    whitelist = w.includes('"dsh-passwords"');
+    whitelist = w.includes('"dsh-access"');
   } catch { /* 同上 */ }
   return { settingsHostMode, whitelist };
 }
@@ -134,7 +134,7 @@ export function applyRemotePatch(dshRoot: string): 'applied' | 'unchanged' | 'mi
 
   // 2) 白名单补齐（整块重建，兼容任意已打过部分补丁的状态）
   const w = readFileSync(wlFile, 'utf8');
-  if (!w.includes('"dsh-passwords"')) {
+  if (!w.includes('"dsh-access"')) {
     const block =
       'const WEB_SETTINGS_NAMESPACES = [\n\t' + WL_NAMESPACES.map((n) => `"${n}"`).join(',\n\t') + '\n];';
     const re = /const WEB_SETTINGS_NAMESPACES = \[[\s\S]*?\];/;
@@ -193,7 +193,7 @@ export function restartDshWeb(service: string, delayMs = 2500): void {
     try {
       execSync(`systemctl restart ${service}`, { stdio: 'ignore' });
     } catch (error) {
-      console.error(`[dsh-passwords] 重启 ${service} 失败（补丁将在下次 dsh 重启后生效）:`, error);
+      console.error(`[dsh-access] 重启 ${service} 失败（补丁将在下次 dsh 重启后生效）:`, error);
     }
   }, delayMs).unref();
 }

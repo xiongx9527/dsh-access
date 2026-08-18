@@ -1,4 +1,4 @@
-// .env 加载：优先读 DSH_PASSWORDS_ENV_FILE（dsh 插件进程用，与网关共享同一份 .env），
+// .env 加载：优先读 DSH_ACCESS_ENV_FILE（dsh 插件进程用，与网关共享同一份 .env），
 // 否则相对模块位置解析项目根目录 .env。
 // 这样无论从哪个目录运行（systemd WorkingDirectory、npm start、
 // 任意目录下的 CLI）都读到同一份配置与同一把密钥。
@@ -9,8 +9,8 @@ import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from '
 import path from 'node:path';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-// dsh 进程里没有本项目的 .env（通过 DSH_PASSWORDS_ENV_FILE 显式指定网关 .env 路径）
-const explicitEnvFile = process.env.DSH_PASSWORDS_ENV_FILE?.trim();
+// dsh 进程里没有本项目的 .env（通过 DSH_ACCESS_ENV_FILE 显式指定网关 .env 路径）
+const explicitEnvFile = process.env.DSH_ACCESS_ENV_FILE?.trim();
 if (explicitEnvFile) {
   loadEnv({ path: explicitEnvFile, quiet: true });
 }
@@ -156,7 +156,7 @@ export function loadConfig(): PlatformConfig {
 
 /** 当前生效的 .env 文件路径（与 loadConfig 的读取路径保持一致） */
 export function envFilePath(): string {
-  return process.env.DSH_PASSWORDS_ENV_FILE?.trim() || path.join(moduleDir, '..', '.env');
+  return process.env.DSH_ACCESS_ENV_FILE?.trim() || path.join(moduleDir, '..', '.env');
 }
 
 /**

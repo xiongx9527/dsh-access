@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 `dsh-passwords-ext` 扩展为可在单个 DSH 实例前提供可管理账号、即时会话撤销、单目录工作区隔离、角色化设置权限和明确登录身份/退出入口的网关。
+**Goal:** 将 `dsh-access` 扩展为可在单个 DSH 实例前提供可管理账号、即时会话撤销、单目录工作区隔离、角色化设置权限和明确登录身份/退出入口的网关。
 
 **Architecture:** 保持 DSH `127.0.0.1:3080` 原样运行，所有多用户控制集中在网关。把账号状态和工作区分配作为 SQLite 中的唯一事实源；每个 HTTP/WS/SSE 请求都重新验证账号、`banned` 和凭据版本；路径访问统一经过真实路径边界策略；客户端通过网关自有 API 获取身份和账户管理数据，并只做表现层隐藏，安全拒绝始终由服务端完成。
 
@@ -19,7 +19,7 @@
 - Admin 不能删除、封禁或降级自己；系统始终保留至少一个有效 Admin。
 - 删除用户不删除工作区文件；改名不移动已有工作区目录。
 - 隔离为网关逻辑隔离，不宣称操作系统、容器或独立实例级硬隔离。
-- SQLite 迁移必须幂等并兼容原版 `dsh-passwords` 数据。
+- SQLite 迁移必须幂等并兼容原版 `dsh-access` 数据。
 
 ---
 

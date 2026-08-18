@@ -1,12 +1,12 @@
-# dsh-passwords
+# dsh-access
 
 [English](README_en.md) | 简体中文
 
 给 DeepSeek Harness（dsh）加一层**服务器级网关**，把它从「本地单机工具」升级成能多人远程使用的**多租户平台**。
 
-dsh 自带的网页界面没有登录、没有权限、没有用量控制——放到服务器上，任何拿到地址的人都能用，还会白白消耗你的模型额度。dsh-passwords 在 dsh 前面挡一层网关：没登录先看登录页；登录后按账号身份做**权限与配额控制**。安装只需一条命令，**无需任何额外配置**即可开箱即用。
+dsh 自带的网页界面没有登录、没有权限、没有用量控制——放到服务器上，任何拿到地址的人都能用，还会白白消耗你的模型额度。dsh-access 在 dsh 前面挡一层网关：没登录先看登录页；登录后按账号身份做**权限与配额控制**。安装只需一条命令，**无需任何额外配置**即可开箱即用。
 
-> **一句话定位：dsh-passwords = 让 dsh 真正变成服务器产品的那一层。** 企业内部分发、API 中转站给客户开子账号、团队共享一台服务器，都是它的目标场景。纯本地单机用 dsh 不需要它；但只要访问地址不是 localhost，先装它。
+> **一句话定位：dsh-access = 让 dsh 真正变成服务器产品的那一层。** 企业内部分发、API 中转站给客户开子账号、团队共享一台服务器，都是它的目标场景。纯本地单机用 dsh 不需要它；但只要访问地址不是 localhost，先装它。
 
 🏅 已收录于 [Awesome DeepSeek Harness](https://github.com/0xsline/awesome-deepseek-harness) 生态索引（Infrastructure & Development）与 [Awesome DSH Plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 插件精选列表（Development & Runtime）。
 
@@ -18,7 +18,7 @@ dsh 自带的网页界面没有登录、没有权限、没有用量控制——�
 - 登录一次管 12 小时（Cookie 会话，关浏览器也不丢）
 - **自动 HTTPS**：装完自动向 Let's Encrypt 申请浏览器信任的证书，零配置、自动续期；80 端口自动跳转 443
 - 登录页自动跟着 dsh 的主题走（dsh 用深色它就深色）
-- 远程浏览器可正常使用 dsh 的全部设置功能（dsh 默认只允许本机浏览器编辑设置，dsh-passwords 自动处理这件事；dsh 升级后若设置页出现异常，设置页卡片里有"重载补丁"一键修复）
+- 远程浏览器可正常使用 dsh 的全部设置功能（dsh 默认只允许本机浏览器编辑设置，dsh-access 自动处理这件事；dsh 升级后若设置页出现异常，设置页卡片里有"重载补丁"一键修复）
 
 ### 2️⃣ 多用户
 
@@ -66,24 +66,24 @@ dsh 自带的网页界面没有登录、没有权限、没有用量控制——�
 
 ```bash
 # Linux / macOS —— 方式 A：直接下载安装
-curl -fsSL https://raw.githubusercontent.com/slywalker2006/dsh-passwords/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/slywalker2006/dsh-access/main/install.sh | bash
 
 # Linux / macOS —— 方式 B：先 clone 再装
-git clone https://github.com/slywalker2006/dsh-passwords
-cd dsh-passwords
+git clone https://github.com/xiongx9527/dsh-access
+cd dsh-access
 bash install.sh
 ```
 
-**Windows**：下载仓库里的 `install.bat` 双击运行（或 clone 后运行）。它会自动把项目装到 `%USERPROFILE%\dsh-passwords` 并完成全部配置。Windows 上绑 80/443 **不需要管理员权限**；端口被占用时网关会以错误码 32 提示。
+**Windows**：下载仓库里的 `install.bat` 双击运行（或 clone 后运行）。它会自动把项目装到 `%USERPROFILE%\dsh-access` 并完成全部配置。Windows 上绑 80/443 **不需要管理员权限**；端口被占用时网关会以错误码 32 提示。
 
 **npm 用户**：
 
 ```bash
-npm install -g dsh-passwords
-dsh-passwords install     # 生成随机 SETUP_KEY + 注册插件 + 应用补丁（等价一键安装）
+npm install -g dsh-access
+dsh-access install     # 生成随机 SETUP_KEY + 注册插件 + 应用补丁（等价一键安装）
 ```
 
-（`dsh-passwords --version` 看版本；`dsh-passwords serve-gateway` 手动启动网关。）
+（`dsh-access --version` 看版本；`dsh-access serve-gateway` 手动启动网关。）
 
 脚本自动完成：装依赖 → 编译 → **生成随机 SETUP_KEY** → 注册为 dsh 插件 → 应用远程设置补丁。
 
@@ -152,7 +152,7 @@ node scripts/start-http.mjs [端口]    # 默认 8080，会弹 y/N 确认
 
 ## 设置页里的访问管理卡片
 
-登录 dsh 后，打开 **设置 → 插件**，能看到"dsh-passwords · 访问管理"卡片。里面可以：
+登录 dsh 后，打开 **设置 → 插件**，能看到"dsh-access · 访问管理"卡片。里面可以：
 
 | 功能 | 谁可用 | 说明 |
 |---|---|---|
@@ -197,7 +197,7 @@ node scripts/start-http.mjs [端口]    # 默认 8080，会弹 y/N 确认
 | `MCP_GATEWAY_PUBLIC_HOST` | 空 | 跳转固定用的公网 IP/域名（防 Host 伪造反射） |
 | `MCP_DSH_ROOT` | 自动探测 | dsh 安装目录（`@deepseek-ai/dsh` 所在处），探测不到时手动指定 |
 | `MCP_DSH_RESTART_SERVICE` | `dsh-web` | 重载补丁后自动重启的 dsh systemd 服务名；显式留空不自动重启 |
-| `DSH_PASSWORDS_ENV_FILE` | 空 | 手动指定 `.env` 路径（插件自动传，一般不用填） |
+| `DSH_ACCESS_ENV_FILE` | 空 | 手动指定 `.env` 路径（插件自动传，一般不用填） |
 
 ## 常用命令
 
@@ -215,7 +215,7 @@ node scripts/start-http.mjs 8080         # 明文 HTTP 模式（危险，y/N 确
 - **忘记主用户密码？** 停服后跑 `node -e "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('data/platform.db');db.exec('DELETE FROM users;')"`，重启后重新走首次配置。
 - **dsh 控制台报错误码 30 / 31，访问管理没起来？** 见上面「自动 HTTPS」的错误码表。修好后重启 dsh 会自动再拉起。
 - **443 端口绑定失败（非 root 用户）？** Linux 上 1024 以下端口需要 root：用 root/sudo 启动 dsh，或把 `MCP_GATEWAY_PORT` 改成高位端口（如 8443）并自行做端口转发。
-- **dsh 启动报 `duplicate loader entry id`？** 你在 profile 里用过 `dsh plugin add`。它会把 profile 里**所有**声明 `dsh.bundle` 的依赖全部加进 bundles 层，与已装的其它插件重复时 dsh 直接启动失败。卸载 dsh-passwords 后改用 `node scripts/register-plugin.mjs` 精确注册（只追加本插件一个条目）。
+- **dsh 启动报 `duplicate loader entry id`？** 你在 profile 里用过 `dsh plugin add`。它会把 profile 里**所有**声明 `dsh.bundle` 的依赖全部加进 bundles 层，与已装的其它插件重复时 dsh 直接启动失败。卸载 dsh-access 后改用 `node scripts/register-plugin.mjs` 精确注册（只追加本插件一个条目）。
 - **npm 装 dsh 报 allow-scripts / node-pty 错？** npm 新版会拦截安装脚本，先放行再重装：`npm config set allow-scripts=@deepseek-ai/dsh-subprocess-local,koffi,node-pty,@google/genai,protobufjs --location=user`，然后重新 `npm install -g @deepseek-ai/dsh`（本项目自身没这个问题，是 dsh 的依赖要跑原生构建）。
 - **dsh 报 `crypto.randomUUID is not a function`？** 旧版网关没有 HTML 注入兼容层，更新代码后**强刷浏览器**（Ctrl+Shift+R）。
 - **数据库文件被偷了要紧吗？** 不要紧。敏感字段全是密文或散列，没有 `.env` 里的密钥解不开；密码本身只有 bcrypt 哈希，本来就没有明文。
@@ -227,7 +227,7 @@ node scripts/start-http.mjs 8080         # 明文 HTTP 模式（危险，y/N 确
 
 > Windows 用户建议直接用 `install.bat`；本节以 Linux 为例，步骤等价。
 
-1. `git clone https://github.com/slywalker2006/dsh-passwords && cd dsh-passwords`
+1. `git clone https://github.com/xiongx9527/dsh-access && cd dsh-access`
 2. `npm install && npm run build`
 3. `cp .env.example .env`，把 `SETUP_KEY` 改成随机串（`openssl rand -hex 24`）
 4. 注册插件：`node scripts/register-plugin.mjs`（等价于把 `link:$(pwd)` 加进 `~/.dsh/profiles/web/package.json` 的 dependencies 和 `dsh.profile.bundles` 再 pnpm install。**不要用 `dsh plugin add`**，原因见常见问题）

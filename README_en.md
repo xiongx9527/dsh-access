@@ -1,12 +1,12 @@
-# dsh-passwords
+# dsh-access
 
 [简体中文](README.md) | English
 
 A **server-grade gateway** for DeepSeek Harness (dsh): it turns dsh from a local, single-user tool into a **multi-tenant platform** people can use remotely.
 
-dsh's built-in web UI has no login, no permissions, and no usage controls — put it on a server and anyone with the URL can use it and burn your model credits. dsh-passwords puts a gateway in front of dsh: unauthenticated visitors see the login page first; after sign-in, every account is subject to **per-account permission and quota enforcement**. Installation takes a single command — **no extra configuration required**, works out of the box.
+dsh's built-in web UI has no login, no permissions, and no usage controls — put it on a server and anyone with the URL can use it and burn your model credits. dsh-access puts a gateway in front of dsh: unauthenticated visitors see the login page first; after sign-in, every account is subject to **per-account permission and quota enforcement**. Installation takes a single command — **no extra configuration required**, works out of the box.
 
-> **One-liner: dsh-passwords is the layer that turns dsh into a real server product.** Enterprise distribution, API relay/reseller stations issuing sub-accounts to customers, and teams sharing one box are its target use cases. You don't need it for purely local use; but if the access URL isn't localhost, install it first.
+> **One-liner: dsh-access is the layer that turns dsh into a real server product.** Enterprise distribution, API relay/reseller stations issuing sub-accounts to customers, and teams sharing one box are its target use cases. You don't need it for purely local use; but if the access URL isn't localhost, install it first.
 
 🏅 Listed in the [Awesome DeepSeek Harness](https://github.com/0xsline/awesome-deepseek-harness) ecosystem index (Infrastructure & Development) and the [Awesome DSH Plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) list (Development & Runtime).
 
@@ -18,7 +18,7 @@ dsh's built-in web UI has no login, no permissions, and no usage controls — pu
 - One login lasts 12 hours (cookie session, survives browser restarts)
 - **Automatic HTTPS**: a browser-trusted Let's Encrypt certificate is issued automatically at install — zero config, auto-renewing; port 80 redirects to 443
 - The login page follows dsh's theme automatically (dark when dsh is dark)
-- Remote browsers can use every dsh settings feature (dsh by default only lets local browsers edit settings; dsh-passwords handles this automatically — and if the settings page breaks after a dsh upgrade, the in-settings card has a one-click "Reload patch" fix)
+- Remote browsers can use every dsh settings feature (dsh by default only lets local browsers edit settings; dsh-access handles this automatically — and if the settings page breaks after a dsh upgrade, the in-settings card has a one-click "Reload patch" fix)
 
 ### 2️⃣ Multi-user
 
@@ -66,24 +66,24 @@ The owner can configure, per subuser, from the settings page:
 
 ```bash
 # Linux / macOS — Option A: download and install directly
-curl -fsSL https://raw.githubusercontent.com/slywalker2006/dsh-passwords/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/slywalker2006/dsh-access/main/install.sh | bash
 
 # Linux / macOS — Option B: clone first, then install
-git clone https://github.com/slywalker2006/dsh-passwords
-cd dsh-passwords
+git clone https://github.com/xiongx9527/dsh-access
+cd dsh-access
 bash install.sh
 ```
 
-**Windows**: download `install.bat` from the repo and double-click it (or run it after cloning). It installs the project into `%USERPROFILE%\dsh-passwords` and completes all configuration. Binding ports 80/443 needs **no admin rights** on Windows; if a port is occupied, the gate exits with error code 32.
+**Windows**: download `install.bat` from the repo and double-click it (or run it after cloning). It installs the project into `%USERPROFILE%\dsh-access` and completes all configuration. Binding ports 80/443 needs **no admin rights** on Windows; if a port is occupied, the gate exits with error code 32.
 
 **npm users**:
 
 ```bash
-npm install -g dsh-passwords
-dsh-passwords install     # generates a random SETUP_KEY, registers the plugin and applies the patch (one-click equivalent)
+npm install -g dsh-access
+dsh-access install     # generates a random SETUP_KEY, registers the plugin and applies the patch (one-click equivalent)
 ```
 
-(`dsh-passwords --version` prints the version; `dsh-passwords serve-gateway` runs the gateway manually.)
+(`dsh-access --version` prints the version; `dsh-access serve-gateway` runs the gateway manually.)
 
 The script handles everything: install dependencies → build → **generate a random SETUP_KEY** → register as a dsh plugin → apply the remote-settings patch.
 
@@ -152,7 +152,7 @@ For a permanent setup: put `MCP_GATEWAY_AUTO_TLS=0` and `MCP_GATEWAY_PORT=8080` 
 
 ## The gate card in dsh settings
 
-After logging in to dsh, open **Settings → Plugins** to find the "dsh-passwords · Access management" card:
+After logging in to dsh, open **Settings → Plugins** to find the "dsh-access · Access management" card:
 
 | Feature | Who can use it | Notes |
 |---|---|---|
@@ -197,7 +197,7 @@ The expanded card has two tabs: **Accounts & permissions** and **Remote access**
 | `MCP_GATEWAY_PUBLIC_HOST` | empty | Public IP/domain used for redirects (prevents Host-header reflection) |
 | `MCP_DSH_ROOT` | auto-detected | dsh install directory (where `@deepseek-ai/dsh` lives); set manually if detection fails |
 | `MCP_DSH_RESTART_SERVICE` | `dsh-web` | systemd service to restart after a patch reload; an explicit empty value disables auto-restart |
-| `DSH_PASSWORDS_ENV_FILE` | empty | Explicit path to `.env` (the plugin passes it automatically — usually not needed) |
+| `DSH_ACCESS_ENV_FILE` | empty | Explicit path to `.env` (the plugin passes it automatically — usually not needed) |
 
 ## Common commands
 
@@ -215,7 +215,7 @@ node scripts/start-http.mjs 8080              # plaintext HTTP mode (dangerous, 
 - **Forgot the owner password?** Stop the service and run `node -e "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('data/platform.db');db.exec('DELETE FROM users;')"`, then restart and redo first-time setup.
 - **dsh's console shows error code 30 / 31 and the gate didn't start?** See the error-code table under "Automatic HTTPS" above. After fixing, restarting dsh pulls the gate up again.
 - **Port 443 fails to bind (non-root user)?** On Linux, ports below 1024 need root: start dsh as root/sudo, or set `MCP_GATEWAY_PORT` to a high port (e.g. 8443) and forward traffic yourself.
-- **dsh fails to start with `duplicate loader entry id`?** You used `dsh plugin add` in the profile. It reconciles ALL dependencies declaring `dsh.bundle` into the bundles layer, which crashes dsh when they overlap with already-installed plugins. Uninstall dsh-passwords and register precisely with `node scripts/register-plugin.mjs` (it appends only this plugin).
+- **dsh fails to start with `duplicate loader entry id`?** You used `dsh plugin add` in the profile. It reconciles ALL dependencies declaring `dsh.bundle` into the bundles layer, which crashes dsh when they overlap with already-installed plugins. Uninstall dsh-access and register precisely with `node scripts/register-plugin.mjs` (it appends only this plugin).
 - **npm fails installing dsh (allow-scripts / node-pty)?** Newer npm blocks install scripts. Allow them first, then reinstall: `npm config set allow-scripts=@deepseek-ai/dsh-subprocess-local,koffi,node-pty,@google/genai,protobufjs --location=user` followed by `npm install -g @deepseek-ai/dsh` again (this project itself has no such issue — it's dsh's dependencies that run native builds).
 - **dsh reports `crypto.randomUUID is not a function`?** An older gateway build lacks the HTML injection compat layer — update the code and **hard-refresh the browser** (Ctrl+Shift+R).
 - **Is it a problem if the database file is stolen?** No. Sensitive fields are encrypted or hashed; without the keys in `.env` they can't be read, and passwords only exist as bcrypt hashes anyway.
@@ -227,7 +227,7 @@ node scripts/start-http.mjs 8080              # plaintext HTTP mode (dangerous, 
 
 > Windows users: use `install.bat` instead. This section uses Linux as the example; the steps are equivalent.
 
-1. `git clone https://github.com/slywalker2006/dsh-passwords && cd dsh-passwords`
+1. `git clone https://github.com/xiongx9527/dsh-access && cd dsh-access`
 2. `npm install && npm run build`
 3. `cp .env.example .env`, replace `SETUP_KEY` with a random string (`openssl rand -hex 24`)
 4. Register the plugin: `node scripts/register-plugin.mjs` (equivalent to adding `link:$(pwd)` to the dependencies and `dsh.profile.bundles` of `~/.dsh/profiles/web/package.json`, then `pnpm install`. **Don't use `dsh plugin add`** — see the FAQ)

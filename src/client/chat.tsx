@@ -1,4 +1,4 @@
-// dsh-passwords 全局聊天入口：注入 dsh 主界面 `shell.overlay` 槽（root 作用域，
+// dsh-access 全局聊天入口：注入 dsh 主界面 `shell.overlay` 槽（root 作用域，
 // 帧级悬浮层，叠加在所有列之上）。
 //   - 左下角圆形聊天按钮 + 右上角红色未读角标
 //   - 点击弹出居中面板（四周等距留白），外层黑色雾化 + 淡入淡出动画

@@ -744,7 +744,7 @@ export function createGatewayServer(
   }
 
   function sendRpcDenied(res: Response, body: unknown, code: string, message: string): void {
-    const rpcId = findStringField(body, 'rpcId') ?? 'dsh-passwords-denied';
+    const rpcId = findStringField(body, 'rpcId') ?? 'dsh-access-denied';
     res.status(200).json({
       type: 'server-response',
       rpcId,
@@ -962,7 +962,7 @@ export function createGatewayServer(
           restartDshWeb(config.patch.restartService, 2500);
         }
       } catch (error) {
-        console.error('[dsh-passwords] 补丁重载失败:', error);
+        console.error('[dsh-access] 补丁重载失败:', error);
       }
     }, 500);
   });
@@ -1362,7 +1362,7 @@ export function createGatewayServer(
       if (parsed.pathname.startsWith('/gateway/')) return next();
       const user = sessionOf(req);
       if (!user) {
-        if (parsed.pathname.startsWith('/api/dsh-passwords/remote-access/')) {
+        if (parsed.pathname.startsWith('/api/dsh-access/remote-access/')) {
           res.status(401).json({ ok: false, code: 'NOT_AUTHENTICATED', error: '未登录或会话已失效' });
           return;
         }

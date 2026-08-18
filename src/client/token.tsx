@@ -9,7 +9,7 @@
 // 因此 cacheRead/cacheWrite 不计入配额，避免子用户额度被系统性虚耗。
 //
 // 设计要点：投影值是【会话内累计值】而非增量。这里记录"上次观测到的累计值"，
-// 只把差值累进 pending，再按固定间隔 POST 到密码门 `/gateway/api/usage/report`，
+// 只把差值累进 pending，再按固定间隔 POST 到访问管理 `/gateway/api/usage/report`，
 // 由网关按小时窗口累计后做子用户每小时 token 配额判定。首次观测值只作为基线
 // 不计费（避免重开会话/重挂载重复计费）。组件渲染 null，不影响 dsh 界面。
 import { useEffect, useRef } from 'react';

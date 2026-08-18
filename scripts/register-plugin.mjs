@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// 把 dsh-passwords 注册进 dsh web profile（精确版，install.sh 调用）。
+// 把 dsh-access 注册进 dsh web profile（精确版，install.sh 调用）。
 //
 // 为什么不用 dsh 自带的 `dsh plugin add`：
 //   它的 reconcile 会把 profile 里【所有】声明 dsh.bundle 的依赖全部加入
 //   bundles 层。若用户之前装过其它独立插件（如 @linxin666 系列，它们同时
 //   又被 dsh-web-ui-all 加载），会触发 duplicate loader entry id，dsh 直接
-//   启动失败。本脚本只精确追加 dsh-passwords 一个条目，其余配置不动。
+//   启动失败。本脚本只精确追加 dsh-access 一个条目，其余配置不动。
 //
 // 行为（幂等）：
 //   1. 确保 ~/.dsh/profiles/web 存在（不存在则按 dsh 模板初始化）
-//   2. dependencies 加入 "dsh-passwords": "link:<本包路径>"
-//   3. dsh.profile.bundles 末尾追加 dsh-passwords（已在则跳过）
+//   2. dependencies 加入 "dsh-access": "link:<本包路径>"
+//   3. dsh.profile.bundles 末尾追加 dsh-access（已在则跳过）
 //   4. pnpm install 物化 link
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -51,14 +51,14 @@ if (existsSync(manifestPath)) {
   };
 }
 
-// 2) 依赖 + bundles（只动 dsh-passwords 一个条目）
+// 2) 依赖 + bundles（只动 dsh-access 一个条目）
 manifest.dependencies = manifest.dependencies ?? {};
-manifest.dependencies['dsh-passwords'] = `link:${installRoot}`;
+manifest.dependencies['dsh-access'] = `link:${installRoot}`;
 manifest.dsh = manifest.dsh ?? {};
 manifest.dsh.profile = manifest.dsh.profile ?? {};
 manifest.dsh.profile.bundles = manifest.dsh.profile.bundles ?? [...WEB_BUNDLES];
-if (!manifest.dsh.profile.bundles.includes('dsh-passwords')) {
-  manifest.dsh.profile.bundles.push('dsh-passwords');
+if (!manifest.dsh.profile.bundles.includes('dsh-access')) {
+  manifest.dsh.profile.bundles.push('dsh-access');
 }
 writeFileSync(manifestPath, JSON.stringify(manifest, undefined, 2) + '\n');
 
@@ -69,14 +69,14 @@ const workspacePath = path.join(profileDir, 'pnpm-workspace.yaml');
 if (!existsSync(workspacePath)) writeFileSync(workspacePath, WORKSPACE);
 
 // 4) pnpm 物化 link（Windows 需经 shell 调 .cmd shim）
-console.log(`[dsh-passwords] profile: ${profileDir}`);
+console.log(`[dsh-access] profile: ${profileDir}`);
 const result = spawnSync('pnpm', ['install'], {
   cwd: profileDir,
   stdio: 'inherit',
   shell: process.platform === 'win32',
 });
 if (result.error !== undefined) {
-  console.error(`[dsh-passwords] 运行 pnpm 失败：${String(result.error)}（请先 npm install -g pnpm）`);
+  console.error(`[dsh-access] 运行 pnpm 失败：${String(result.error)}（请先 npm install -g pnpm）`);
   process.exit(127);
 }
 process.exit(result.status ?? 1);
