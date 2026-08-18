@@ -27,7 +27,7 @@ const warnLines = isEn
   ? [
       '=============================================================',
       '  WARNING: plain HTTP mode',
-      '  Passwords and session cookies travel in cleartext and can be',
+      '  Access management and session cookies travel in cleartext and can be',
       '  sniffed on the network. Prefer automatic HTTPS (the default',
       '  mode, needs no configuration) for public deployments.',
       '  Continuing means you accept this risk.',

@@ -66,7 +66,7 @@ The owner can configure, per subuser, from the settings page:
 
 ```bash
 # Linux / macOS — Option A: download and install directly
-curl -fsSL https://raw.githubusercontent.com/slywalker2006/dsh-access/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/xiongx9527/dsh-access/main/install.sh | bash
 
 # Linux / macOS — Option B: clone first, then install
 git clone https://github.com/xiongx9527/dsh-access
@@ -107,7 +107,7 @@ dsh exits  → the gate stops with it (no orphan process holding ports)
 ```
 
 - Advanced: to run the gateway standalone, use `node dist/cli.js serve-gateway` or set up your own systemd unit.
-- Temporarily disable the auto-start (debugging): start dsh with `DSH_PASSWORDS_NO_AUTOSTART=1`.
+- Temporarily disable the auto-start (debugging): start dsh with `DSH_ACCESS_NO_AUTOSTART=1`.
 
 ## Automatic HTTPS (no certs to buy, nothing to configure)
 
@@ -161,18 +161,18 @@ After logging in to dsh, open **Settings → Plugins** to find the "dsh-access �
 | **Change username** | Yourself; the owner can change anyone's | Sign in with the new username afterwards |
 | **Subuser management** | Owner only | Create/delete subusers (subusers can sign in but have no admin rights) |
 | **Subuser permissions** | Owner only | Workspace allowlist, hourly token limit, daily time limit, sandbox level, upload/git-download toggles, ban |
-| **Remote access** | Owner configures it | LAN QR code, login URL and Cloudflare quick tunnel; all traffic enters through the Passwords login gateway |
+| **Remote access** | Owner configures it | LAN QR code, login URL and Cloudflare quick tunnel; all traffic enters through the Access management login gateway |
 | **Chat / messages** | All signed-in users | Chat button in the bottom-left corner, with tags (issue/pull request/discussion/announcement/question) |
 
 - **Owner** = the account created at first-time setup; everything added later is a **subuser**.
-- Passwords follow the same rule as the login page: at least 12 characters with uppercase, lowercase, digits and symbols.
+- Access management follow the same rule as the login page: at least 12 characters with uppercase, lowercase, digits and symbols.
 
 ### Unified remote access
 
 The expanded card has two tabs: **Accounts & permissions** and **Remote access**. The gateway port is shared configuration. After a new port is saved and the gateway is confirmed running, the card switches to Remote access and refreshes the LAN URL and QR code.
 
-- LAN URLs use `http://<computer-LAN-IP>:<gateway-port>` and always open the Passwords sign-in flow first.
-- A Cloudflare quick tunnel targets the same Passwords gateway and still requires an account login.
+- LAN URLs use `http://<computer-LAN-IP>:<gateway-port>` and always open the Access management sign-in flow first.
+- A Cloudflare quick tunnel targets the same Access management gateway and still requires an account login.
 - Port 3080 remains the loopback-only upstream; this plugin does not listen on Pocket's port 3081.
 - If `dsh-pocket` is already installed, disable or remove it to avoid duplicate entry points and port conflicts. This plugin never uninstalls another plugin automatically.
 - Plain HTTP is suitable only for a trusted LAN; prefer HTTPS for public access.
@@ -237,7 +237,7 @@ Then as usual: start dsh → the gate starts automatically → open `https://<yo
 
 ## Security & privacy
 
-Passwords are stored only as bcrypt hashes; usernames, IPs and audit records are encrypted at rest; every login and failure is audited; certificate-issuance failure stops the service instead of downgrading to plaintext. All keys live in your own `.env` and database — open source code does not weaken security.
+Access management are stored only as bcrypt hashes; usernames, IPs and audit records are encrypted at rest; every login and failure is audited; certificate-issuance failure stops the service instead of downgrading to plaintext. All keys live in your own `.env` and database — open source code does not weaken security.
 
 - **Brute-force protection**: failed logins lock the account, and the lock duration backs off per round (1 → 5 → 15 → 60 minutes, capped). Owner accounts can't be globally locked out by IP-rotation (per-IP locking still applies) — prevents account-level DoS.
 - **Password-spray protection (per-IP throttle)**: 30 failed logins from the same IP within 15 minutes → that IP is globally throttled for 30 minutes (accumulated across usernames — aimed at the "one IP rotating many usernames" spraying technique; bcrypt is not consumed while throttled, and a successful login lifts the throttle). If a large NAT/shared egress trips it by accident, it auto-recovers after 30 minutes with no manual action.

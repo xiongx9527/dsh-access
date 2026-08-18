@@ -19,13 +19,13 @@ where git >nul 2>nul || (
 )
 
 set "DEST=%USERPROFILE%\dsh-access"
-if defined DSH_PASSWORDS_DIR set "DEST=%DSH_PASSWORDS_DIR%"
+if defined DSH_ACCESS_DIR set "DEST=%DSH_ACCESS_DIR%"
 if exist "%DEST%" (
   echo [dsh-access] Directory already exists: %DEST%
   echo [dsh-access] Reinstall: delete it first, but back up .env and data\ inside.
   exit /b 1
 )
-git clone --depth 1 https://github.com/slywalker2006/dsh-access.git "%DEST%"
+git clone --depth 1 https://github.com/xiongx9527/dsh-access.git "%DEST%"
 if errorlevel 1 exit /b 1
 cd /d "%DEST%"
 

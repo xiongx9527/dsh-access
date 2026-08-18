@@ -141,7 +141,7 @@ function errText(error: unknown, tr: (key: string, params?: Record<string, strin
   return tr('opFailed');
 }
 
-export function DshPasswordsCard(props: PropsLocale<'dshpw'>) {
+export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
   const t = props.t;
   const [data, setData] = useState<StateData | null>(null);
   const [patchState, setPatchState] = useState<PatchState | null>(null);

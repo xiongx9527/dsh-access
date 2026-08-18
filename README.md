@@ -66,7 +66,7 @@ dsh 自带的网页界面没有登录、没有权限、没有用量控制——�
 
 ```bash
 # Linux / macOS —— 方式 A：直接下载安装
-curl -fsSL https://raw.githubusercontent.com/slywalker2006/dsh-access/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/xiongx9527/dsh-access/main/install.sh | bash
 
 # Linux / macOS —— 方式 B：先 clone 再装
 git clone https://github.com/xiongx9527/dsh-access
@@ -107,7 +107,7 @@ dsh 退出 → 访问管理跟着停（不会留僵尸进程占端口）
 ```
 
 - 高级用法：想单独托管网关进程？`node dist/cli.js serve-gateway` 手动跑，或自己配 systemd 也行。
-- 临时禁止自动拉起（调试用）：启动 dsh 时加环境变量 `DSH_PASSWORDS_NO_AUTOSTART=1`。
+- 临时禁止自动拉起（调试用）：启动 dsh 时加环境变量 `DSH_ACCESS_NO_AUTOSTART=1`。
 
 ## 自动 HTTPS（不用买证书、不用配置）
 
@@ -161,7 +161,7 @@ node scripts/start-http.mjs [端口]    # 默认 8080，会弹 y/N 确认
 | **修改用户名** | 本人改自己；主用户可改任何人 | 改名后需用新用户名重新登录 |
 | **子用户管理** | 仅主用户 | 创建/删除子用户（子用户可用登录页进入，但没有管理权限） |
 | **子用户权限** | 仅主用户 | 工作区白名单、每小时 token 上限、每日时长上限、沙盒级别、上传/git 下载开关、封禁 |
-| **远程访问** | 仅主用户配置 | 局域网二维码、登录地址、Cloudflare 临时隧道；全部流量先经过 Passwords 登录网关 |
+| **远程访问** | 仅主用户配置 | 局域网二维码、登录地址、Cloudflare 临时隧道；全部流量先经过 Access management 登录网关 |
 | **聊天 / 留言** | 所有登录用户 | 左下角聊天按钮，支持标签（议题/拉取请求/讨论/公告/问题） |
 
 - **主用户** = 首次配置时创建的那个账号；之后添加的都是**子用户**。
@@ -171,8 +171,8 @@ node scripts/start-http.mjs [端口]    # 默认 8080，会弹 y/N 确认
 
 卡片展开后分为 **账号与权限** 和 **远程访问** 两个 Tab。网关端口是公共配置；保存新端口并确认网关启动成功后，页面会自动切到远程访问并刷新局域网 URL 与二维码。
 
-- 局域网地址格式：`http://<电脑局域网 IP>:<网关端口>`，扫码后先登录 Passwords。
-- 公网临时访问通过 cloudflared 指向同一个 Passwords 网关，临时 URL 仍然需要账号登录。
+- 局域网地址格式：`http://<电脑局域网 IP>:<网关端口>`，扫码后先登录 Access management。
+- 公网临时访问通过 cloudflared 指向同一个 访问管理网关，临时 URL 仍然需要账号登录。
 - 3080 始终保持本机 loopback 上游；本插件不会监听 Pocket 的 3081。
 - 如果以前安装过 `dsh-pocket`，请停用或移除它，避免出现重复入口与端口占用；本插件不会自动卸载其他插件。
 - 明文 HTTP 只适合可信内网，公网访问优先使用 HTTPS。

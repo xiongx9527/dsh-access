@@ -319,7 +319,7 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
         console.error('[dsh-access] 访问管理未编译（缺少 dist/cli.js）：请先到安装目录运行 npm install && npm run build');
         return noop;
       }
-      if (process.env.DSH_PASSWORDS_NO_AUTOSTART === '1') return noop;
+      if (process.env.DSH_ACCESS_NO_AUTOSTART === '1') return noop;
       void gatewayAlreadyRunning(activePort).then((running) => {
         if (disposed) return;
         if (running) {

@@ -28,7 +28,7 @@ loop:
 acceptance:
   - id: A1
     source: brief.md
-    text: A1：Passwords 设置卡片显示“账号与权限”和“远程访问”两个 Tab，默认打开“账号与权限”。
+    text: A1：Access management 设置卡片显示“账号与权限”和“远程访问”两个 Tab，默认打开“账号与权限”。
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -83,7 +83,7 @@ acceptance:
       truncated: false
   - id: A7
     source: brief.md
-    text: A7：手机或另一台电脑打开 LAN URL 时，未登录请求进入 Passwords 登录页；登录后的 HTTP、SSE 和 WebSocket
+    text: A7：手机或另一台电脑打开 LAN URL 时，未登录请求进入 访问管理登录页；登录后的 HTTP、SSE 和 WebSocket
       继续经过现有账号与权限检查。
     result: passed
     reason:
@@ -121,7 +121,7 @@ acceptance:
       truncated: false
   - id: A11
     source: brief.md
-    text: A11：Cloudflare 隧道始终指向当前 Passwords 网关端口，不能指向 3080 或 3081；关闭后 cloudflared
+    text: A11：Cloudflare 隧道始终指向当前 访问管理网关端口，不能指向 3080 或 3081；关闭后 cloudflared
       子进程退出且 URL 清空。
     result: passed
     reason:
@@ -185,7 +185,7 @@ acceptance:
       truncated: false
   - id: A18
     source: brief.md
-    text: A18：`npm test` 与 `npm run build` 通过；本机 3080 直连保持可用，局域网电脑可通过 Passwords
+    text: A18：`npm test` 与 `npm run build` 通过；本机 3080 直连保持可用，局域网电脑可通过 Access management
       网关完成登录，公网隧道可完成登录和 WebSocket 流式通信。
     result: passed
     reason:
@@ -195,7 +195,7 @@ acceptance:
       truncated: false
   - id: A19
     source: specs/remote-access/spec.md
-    text: Passwords 设置卡片具有两个顶层 Tab：“账号与权限”和“远程访问”。
+    text: Access management 设置卡片具有两个顶层 Tab：“账号与权限”和“远程访问”。
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -240,7 +240,7 @@ acceptance:
       truncated: false
   - id: A24
     source: specs/remote-access/spec.md
-    text: 状态条显示 Passwords 网关是否运行、当前实际端口以及远程访问必须登录。
+    text: 状态条显示 访问管理网关是否运行、当前实际端口以及远程访问必须登录。
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -330,7 +330,7 @@ acceptance:
       truncated: false
   - id: A34
     source: specs/remote-access/spec.md
-    text: LAN 和公网 URL 都进入 Passwords 网关。
+    text: LAN 和公网 URL 都进入 访问管理网关。
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -447,7 +447,7 @@ acceptance:
       truncated: false
   - id: A47
     source: specs/remote-access/spec.md
-    text: 隧道目标只能是本机 Passwords 网关的当前端口。
+    text: 隧道目标只能是本机 访问管理网关的当前端口。
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -465,7 +465,7 @@ acceptance:
       truncated: false
   - id: A49
     source: specs/remote-access/spec.md
-    text: cloudflared 可执行文件保存在 Passwords 数据目录的专用子目录。
+    text: cloudflared 可执行文件保存在 Access management 数据目录的专用子目录。
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using
@@ -636,7 +636,7 @@ acceptance:
       truncated: false
   - id: A68
     source: specs/remote-access/spec.md
-    text: 继续使用现有 Passwords SQLite、认证、权限和网关配置。
+    text: 继续使用现有 Access management SQLite、认证、权限和网关配置。
     result: passed
     reason:
       text: Final independent verifier found this acceptance item satisfied using

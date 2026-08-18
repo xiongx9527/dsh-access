@@ -1,9 +1,9 @@
 schema: comet.native.v4
 name: rename-to-dsh-access
 language: zh-CN
-phase: build
+phase: verify
 status: active
-state_version: 2
+state_version: 4
 brief: brief.md
 spec_changes:
   - capability: rename
@@ -15,16 +15,16 @@ workspace:
   target_branch: main
   finish: null
 loop:
-  stage: building
+  stage: verify-ready
   goal_cycle: 1
   iteration: 1
-  attempt: 0
+  attempt: 1
   retry_epoch: 0
   failed_iteration_count: 0
   no_progress_count: 0
   execution_failure_count: 0
   previous_unresolved_ids: []
-  next_action: submit-builder-candidate
+  next_action: await-verifier-result
 acceptance:
   - id: A1
     source: brief.md
@@ -34,8 +34,8 @@ acceptance:
     reason: null
   - id: A2
     source: brief.md
-    text: A2：源代码、客户端 bundle、测试、安装脚本和活跃文档中不再出现 `dsh-access` 或
-      `dsh-access`；历史 Git 提交不要求改写。
+    text: A2：源代码、客户端 bundle、测试、安装脚本和活跃文档中不再出现 `dsh-access` 或 `dsh-access`；历史 Git
+      提交不要求改写。
     result: pending
     reason: null
   - id: A3
@@ -238,8 +238,7 @@ acceptance:
     reason: null
   - id: A40
     source: specs/rename/spec.md
-    text: Leave `xiongx9527/dsh-access` untouched for the user to delete
-      manually.
+    text: Leave `xiongx9527/dsh-access` untouched for the user to delete manually.
     result: pending
     reason: null
   - id: A41
@@ -262,8 +261,7 @@ acceptance:
     reason: null
   - id: A44
     source: specs/rename/spec.md
-    text: "`git grep -n -i
-      'dsh-access\\|dsh-access\\|DSH_ACCESS_ENV_FILE' -- active
+    text: "`git grep -n -i 'dsh-access\\|dsh-access\\|DSH_ACCESS_ENV_FILE' -- active
       source/tests/docs` returns no active identity hits, excluding Git history
       and explicitly retained provenance artifacts."
     result: pending
@@ -293,7 +291,79 @@ acceptance:
     text: New standalone GitHub repository contains the verified main commit.
     result: pending
     reason: null
-builder_handoff: null
+builder_handoff:
+  candidate_id: 2f0e9328-dbb5-445d-9dc1-c961516acc48
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:40bfc346-8a96-41cc-95ef-2a1186bde830
+  iteration: 1
+  summary:
+    text: 完成旧技术标识 -> dsh-access 全量重命名候选：package name/bin/version=
+      dsh-access/1.0.0，插件 name、settings section、客户端/服务端 ID、API
+      前缀、环境变量、CLI、安装脚本、文档和日志标识均已迁移；用户界面保留“访问管理”，旧
+      旧包名、旧仓库名、旧环境变量和旧网关称呼
+      活跃标识扫描无命中；数据库与配置数据结构不变。已创建公开独立仓库 xiongx9527/dsh-access 并确认 isFork=false，但
+      GitHub HTTPS 当前持续连接超时，当前 main 快照尚未推送；旧 fork 未删除。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+    - A9
+    - A10
+  checks:
+    - name:
+        text: npm test
+        truncated: false
+      result: passed
+      note:
+        text: 104 tests passed, 0 failed
+        truncated: false
+    - name:
+        text: npm run build
+        truncated: false
+      result: passed
+      note:
+        text: dsh-access@1.0.0 TypeScript and client build completed
+        truncated: false
+    - name:
+        text: npm pack --dry-run
+        truncated: false
+      result: passed
+      note:
+        text: produced dsh-access-1.0.0.tgz contents
+        truncated: false
+    - name:
+        text: active old identifier scan
+        truncated: false
+      result: passed
+      note:
+        text: no legacy package, repository, environment-variable or gateway-name hits outside excluded Git history/node_modules/dist
+        truncated: false
+    - name:
+        text: standalone repository metadata
+        truncated: false
+      result: passed
+      note:
+        text: xiongx9527/dsh-access exists, PUBLIC, isFork=false
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: Pushing the current main snapshot to the new standalone repository failed
+        repeatedly with GitHub HTTPS connection timeouts; retry is required
+        before archive.
+      truncated: false
+    - text: The previous fork is intentionally retained for
+        manual deletion after the new repository is verified.
+      truncated: false
+    - text: No package publish to npm was performed.
+      truncated: false
+  known_limits_truncated: false
+  submitted_at: 2026-08-18T05:13:42.427Z
 blockers: []
 verification: null
 history: []

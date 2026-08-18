@@ -80,7 +80,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ensureCloudflared } from '../src/tunnel.js';
 
-test('ensureCloudflared copies a PATH binary into the Passwords data directory', async () => {
+test('ensureCloudflared copies a PATH binary into the Access management data directory', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dshpw-cloudflared-'));
   const pathDir = join(root, 'path');
   const home = join(root, 'home');

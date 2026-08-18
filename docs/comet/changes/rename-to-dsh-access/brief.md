@@ -19,7 +19,7 @@
 - 不迁移或删除用户数据库、密钥、cloudflared 缓存或运行数据。
 - 不自动删除旧 GitHub fork `xiongx9527/dsh-access`。
 - 不保留旧 `dsh-access` API、插件 ID、环境变量或 npm 包别名；这是一次明确的全量重命名。
-- 不修改上游 `slywalker2006/dsh-access` 仓库。
+- 不修改上游 `xiongx9527/dsh-access` 仓库。
 - 不在本 change 中创建 PR；只创建独立仓库并推送 main。
 
 # Acceptance examples

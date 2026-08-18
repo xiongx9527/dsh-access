@@ -1,8 +1,8 @@
-# Passwords 统一远程访问规格
+# Access management 统一远程访问规格
 
 ## 设置界面
 
-- Passwords 设置卡片具有两个顶层 Tab：“账号与权限”和“远程访问”。
+- Access management 设置卡片具有两个顶层 Tab：“账号与权限”和“远程访问”。
 - 默认 Tab 是“账号与权限”。该 Tab 展示并保留完整的账号、用户名、密码、子用户、权限、配额和工作区管理能力。
 - 卡片公共区域继续展示补丁状态、重载补丁操作、网关端口输入、保存按钮和当前端口提示。
 - “远程访问”Tab 不重复显示端口输入框。
@@ -10,7 +10,7 @@
 
 ## 统一入口状态
 
-- 状态条显示 Passwords 网关是否运行、当前实际端口以及远程访问必须登录。
+- 状态条显示 访问管理网关是否运行、当前实际端口以及远程访问必须登录。
 - 网关未运行或状态读取失败时显示明确错误，不展示“可访问”。
 - 独立 Pocket 3081 入口不属于该能力，插件不得监听 3081。
 
@@ -26,7 +26,7 @@
 
 ## 登录与权限边界
 
-- LAN 和公网 URL 都进入 Passwords 网关。
+- LAN 和公网 URL 都进入 访问管理网关。
 - 未登录页面请求跳转到 `/gateway/login`。
 - 登录后的页面、HTTP API、SSE 和 WebSocket 使用现有账号实时校验、封禁、删除、凭据版本、请求策略和连接撤销逻辑。
 - 远程访问状态、隧道启动和隧道停止 API 仅允许 Admin。
@@ -65,9 +65,9 @@ interface RemoteAccessStatus {
 
 ## Cloudflare 临时隧道
 
-- 隧道目标只能是本机 Passwords 网关的当前端口。
+- 隧道目标只能是本机 访问管理网关的当前端口。
 - 隧道不得直接连接 DSH 3080，也不得使用 Pocket 3081。
-- cloudflared 可执行文件保存在 Passwords 数据目录的专用子目录。
+- cloudflared 可执行文件保存在 Access management 数据目录的专用子目录。
 - 下载和启动过程公开安全的阶段和错误摘要，不公开敏感命令行数据。
 - 识别到 `https://*.trycloudflare.com` URL 后进入运行状态并生成二维码。
 - 进程异常退出进入错误状态并清理 URL。
@@ -95,7 +95,7 @@ interface RemoteAccessStatus {
 - 安装 `dsh-access` 后不要求安装 `dsh-pocket`。
 - 已安装 Pocket 时不自动卸载；文档提示停止或移除 Pocket 以避免重复入口和端口占用。
 - 不迁移 Pocket 的临时隧道 URL、进程状态或缓存。
-- 继续使用现有 Passwords SQLite、认证、权限和网关配置。
+- 继续使用现有 Access management SQLite、认证、权限和网关配置。
 - Node.js 版本要求保持 `>=22.5`。
 
 ## 验证要求
