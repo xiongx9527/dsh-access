@@ -15,6 +15,7 @@ import { zh, en } from './locales';
 
 /** 卡片样式：全部使用 dsh 设计令牌（--dsw-alias-*），颜色/主题与官方 PluginCard 完全一致 */
 const CSS = `
+.dshpw-access-nav-icon{width:16px;height:16px;display:block;flex:none;color:currentColor}
 .dshpw-card{display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-3);transition:border-color .16s,background .16s;font-size:13px;line-height:1.5;overflow:hidden}
 .dshpw-card:hover{border-color:var(--dsw-alias-label-dimmed)}
 .dshpw-card.open{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}
@@ -148,6 +149,42 @@ if (typeof document !== 'undefined') {
 
 export const inject = ['slots', 'locale'] as const;
 
+export function isAccessManagementLabel(text: string): boolean {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  return normalized === '访问管理' || normalized === 'Access management';
+}
+
+function installAccessManagementIcon(): () => void {
+  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return () => {};
+  const patched = new Map<HTMLElement, { icon: SVGElement; display: string; custom: HTMLElement }>();
+  const apply = () => {
+    for (const button of Array.from(document.querySelectorAll('button'))) {
+      if (!(button instanceof HTMLElement) || !isAccessManagementLabel(button.textContent ?? '') || patched.has(button)) continue;
+      const icon = button.querySelector('svg');
+      if (!(icon instanceof SVGElement)) continue;
+      const custom = document.createElement('span');
+      custom.className = 'dshpw-access-nav-icon';
+      custom.setAttribute('aria-hidden', 'true');
+      custom.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5 13 3v4.1c0 3.1-2 5.8-5 7.4-3-1.6-5-4.3-5-7.4V3l5-1.5Z"/><path d="m5.5 8 1.6 1.6L10.7 6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      const display = icon.style.display;
+      icon.style.display = 'none';
+      button.insertBefore(custom, icon);
+      patched.set(button, { icon, display, custom });
+    }
+  };
+  apply();
+  const observer = new MutationObserver(apply);
+  if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+  return () => {
+    observer.disconnect();
+    for (const { icon, display, custom } of patched.values()) {
+      icon.style.display = display;
+      custom.remove();
+    }
+    patched.clear();
+  };
+}
+
 export function apply(ctx: ClientContext): void {
   // 独立设置一级入口：不再出现在“插件配置”列表中。
   ctx.slots.inject('settings.section', () =>
@@ -163,6 +200,8 @@ export function apply(ctx: ClientContext): void {
       DshPasswordsCard,
     ),
   );
+
+  ctx.effect(() => installAccessManagementIcon(), 'dsh-passwords: access navigation icon');
 
   // 只有通过登录网关访问时才注册账号入口；3080 直连没有 /gateway/api/me，保持原生界面。
   // 3088 网关中的 Admin 与子用户都 shadow DSH 原生设置入口；3080 直连保持原生设置。
