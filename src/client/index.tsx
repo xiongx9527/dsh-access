@@ -114,7 +114,7 @@ const CSS = `
 .dshpw-remote-dot{width:9px;height:9px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}
 .dshpw-remote-status.ready .dshpw-remote-dot{background:var(--dsw-alias-label-success,#22c55e)}
 .dshpw-remote-card{padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:13px;background:var(--dsw-alias-bg-layer-2)}
-.dshpw-remote-card-head{display:flex;align-items:center;justify-content:space-between;gap:14px}.dshpw-remote-public-card .dshpw-remote-card-head{min-height:112px}
+.dshpw-remote-card-head{display:flex;align-items:center;justify-content:space-between;gap:14px}.dshpw-remote-public-card .dshpw-remote-card-head{min-height:64px}
 .dshpw-remote-card-head h3{margin:0;font-size:14px}.dshpw-remote-card-head p{margin:3px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px}
 .dshpw-remote-badge{padding:4px 9px;border-radius:999px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-tertiary)}
 .dshpw-remote-badge.ready{background:color-mix(in srgb,var(--dsw-alias-label-success,#22c55e) 12%,transparent);color:var(--dsw-alias-label-success,#22c55e)}
