@@ -39,12 +39,12 @@
 - Active README and installation docs use the new package/repository/CLI names and do not present the legacy package as an installable identity.
 - Technical historical archive text may retain provenance only if it is not shipped as active package documentation; shipped files and active source must not expose the old name.
 
-## Repository migration
+## Local repository finish
 
-- Create a new public non-fork repository `xiongx9527/dsh-access`.
-- Push the verified local `main` to the new repository's `main`.
-- Verify `isFork=false`, default branch `main`, and the remote tree matches the verified local snapshot.
-- Leave `xiongx9527/dsh-passwords-ext` untouched for the user to delete manually.
+- This change does not push to GitHub or modify any remote repository.
+- Commit the verified candidate on `comet/rename-to-dsh-access`.
+- Finish the Native change by merging the candidate into the local `main` branch.
+- Leave the configured GitHub remote and `xiongx9527/dsh-passwords-ext` untouched; remote synchronization is a later independent change.
 
 ## Compatibility and data
 
@@ -59,4 +59,4 @@
 - `npm run build` passes.
 - `npm pack --dry-run` lists `dsh-access-1.0.0.tgz`.
 - New package installs and starts DSH with the existing database.
-- New standalone GitHub repository contains the verified main snapshot.
+- Candidate changes are committed on the change branch and merged into local `main` during Archive; no GitHub push is performed.
