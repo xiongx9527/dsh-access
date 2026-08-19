@@ -3,7 +3,7 @@ name: dsh-access-followup
 language: zh-CN
 phase: archive
 status: active
-state_version: 19
+state_version: 20
 brief: brief.md
 spec_changes:
   - capability: runtime-chain
@@ -13,7 +13,7 @@ workspace:
   isolation: worktree
   change_branch: comet/dsh-access-followup
   target_branch: main
-  finish: merge
+  finish: keep
 loop:
   stage: archive-ready
   goal_cycle: 1
