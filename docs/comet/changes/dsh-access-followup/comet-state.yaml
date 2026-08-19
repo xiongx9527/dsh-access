@@ -1,0 +1,184 @@
+schema: comet.native.v4
+name: dsh-access-followup
+language: zh-CN
+phase: build
+status: active
+state_version: 2
+brief: brief.md
+spec_changes:
+  - capability: runtime-chain
+    operation: create
+    source: specs/runtime-chain/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/dsh-access-followup
+  target_branch: main
+  finish: null
+loop:
+  stage: building
+  goal_cycle: 1
+  iteration: 1
+  attempt: 0
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: submit-builder-candidate
+acceptance:
+  - id: A1
+    source: brief.md
+    text: A1：使用既有数据库副本启动 `dsh-access` 后，原账号可以在网关登录页完成登录；数据库结构和原账号记录与启动前快照一致。
+    result: pending
+    reason: null
+  - id: A2
+    source: brief.md
+    text: A2：未登录访问网关保护的 DSH Web/API 时进入认证边界；原账号登录后访问本机 DSH Web 可以获得预期页面和会话响应。
+    result: pending
+    reason: null
+  - id: A3
+    source: brief.md
+    text: A3：远程状态返回的 LAN 地址使用访问管理网关端口；从可用 LAN 地址访问时仍先经过登录，并且登录后 DSH Web/API
+      请求可用，不直接暴露上游端口。
+    result: pending
+    reason: null
+  - id: A4
+    source: brief.md
+    text: A4：经访问管理网关的已认证 HTTP、SSE 和 WebSocket 请求可以到达 DSH Web；未认证请求被拒绝或重定向，不能绕过访问管理策略。
+    result: pending
+    reason: null
+  - id: A5
+    source: brief.md
+    text: A5：`npm test`、`npm run build` 和必要的本地安装/启动 smoke 检查通过；新增修复有对应回归测试。
+    result: pending
+    reason: null
+  - id: A6
+    source: brief.md
+    text: A6：候选变更只包含本 change 的实现、测试和正式产物，提交在 `comet/dsh-access-followup`；归档时只合并到本地
+      `main`，不执行 GitHub push。
+    result: pending
+    reason: null
+  - id: A7
+    source: specs/runtime-chain/spec.md
+    text: "`dsh-access` 作为 DSH Web 的访问管理网关，必须在保留既有数据库和原账号数据的前提下，提供从登录到本机、LAN
+      和远程协议访问的完整链路。所有受保护的 DSH 请求都经过网关认证、会话、权限和请求策略处理后，才转发到 DSH 上游。"
+    result: pending
+    reason: null
+  - id: A8
+    source: specs/runtime-chain/spec.md
+    text: 使用既有数据库副本启动时，不修改 SQLite 文件结构、表、字段、SETUP_KEY 派生值或账号记录。
+    result: pending
+    reason: null
+  - id: A9
+    source: specs/runtime-chain/spec.md
+    text: 既有原账号可以使用原凭据登录访问管理网关。
+    result: pending
+    reason: null
+  - id: A10
+    source: specs/runtime-chain/spec.md
+    text: 登录后会话继续使用既有 cookie/session 机制，并遵守账号状态、会话撤销和权限策略。
+    result: pending
+    reason: null
+  - id: A11
+    source: specs/runtime-chain/spec.md
+    text: 验证或修复不得通过删除数据库、重建原账号或跳过认证来获得通过结果。
+    result: pending
+    reason: null
+  - id: A12
+    source: specs/runtime-chain/spec.md
+    text: 未登录访问网关保护的页面或 API 时，进入访问管理认证边界。
+    result: pending
+    reason: null
+  - id: A13
+    source: specs/runtime-chain/spec.md
+    text: 原账号登录成功后，网关可以将 DSH Web 页面请求转发到已配置的 DSH 上游。
+    result: pending
+    reason: null
+  - id: A14
+    source: specs/runtime-chain/spec.md
+    text: 上游响应仍经过现有 HTML 注入、请求策略和会话处理；网关不会把认证后的请求直接暴露为绕过策略的旁路。
+    result: pending
+    reason: null
+  - id: A15
+    source: specs/runtime-chain/spec.md
+    text: 远程状态使用访问管理网关端口生成 LAN 地址和二维码数据。
+    result: pending
+    reason: null
+  - id: A16
+    source: specs/runtime-chain/spec.md
+    text: 存在可用 LAN IPv4 时，从 LAN 地址访问必须先经过访问管理登录；登录后页面和 API 请求可用。
+    result: pending
+    reason: null
+  - id: A17
+    source: specs/runtime-chain/spec.md
+    text: LAN 地址不能指向 DSH 上游端口，也不能绕过访问管理网关。
+    result: pending
+    reason: null
+  - id: A18
+    source: specs/runtime-chain/spec.md
+    text: 没有可用 LAN IPv4 时，状态明确返回空 LAN 字段，并将该环境限制记录为不可执行项，而不是伪造 LAN 通过。
+    result: pending
+    reason: null
+  - id: A19
+    source: specs/runtime-chain/spec.md
+    text: 访问管理网关支持已认证的 HTTP、SSE 和 WebSocket 请求转发到 DSH 上游。
+    result: pending
+    reason: null
+  - id: A20
+    source: specs/runtime-chain/spec.md
+    text: 原账号登录后的 HTTP、SSE 和 WebSocket 请求沿用现有身份、封禁、会话撤销、权限和请求策略。
+    result: pending
+    reason: null
+  - id: A21
+    source: specs/runtime-chain/spec.md
+    text: 未认证的远程协议请求不能直接到达 DSH 上游；HTTP API 按现有约定返回认证响应，页面请求进入登录边界。
+    result: pending
+    reason: null
+  - id: A22
+    source: specs/runtime-chain/spec.md
+    text: WebSocket 和 SSE 不得因为普通 HTTP 登录保护而被错误地绕过或错误地当作静态页面处理。
+    result: pending
+    reason: null
+  - id: A23
+    source: specs/runtime-chain/spec.md
+    text: 运行期验证必须覆盖原账号登录、本机页面、LAN 入口和 HTTP/SSE/WebSocket 协议转发。
+    result: pending
+    reason: null
+  - id: A24
+    source: specs/runtime-chain/spec.md
+    text: 发现实现缺陷时，只做满足本规格所需的最小源代码和测试修改。
+    result: pending
+    reason: null
+  - id: A25
+    source: specs/runtime-chain/spec.md
+    text: 每个修复必须有自动化回归测试或可重复的运行期证据。
+    result: pending
+    reason: null
+  - id: A26
+    source: specs/runtime-chain/spec.md
+    text: "`npm test` 和 `npm run build` 必须通过。"
+    result: pending
+    reason: null
+  - id: A27
+    source: specs/runtime-chain/spec.md
+    text: 既有重命名、许可证、用户界面品牌和远程仓库状态不属于本规格的修改范围。
+    result: pending
+    reason: null
+builder_handoff: null
+blockers: []
+verification: null
+history: []
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pending
+verification_report: null
+archived: false
+created_at: 2026-08-19T13:17:22.372Z
