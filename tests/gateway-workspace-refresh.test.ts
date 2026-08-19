@@ -24,8 +24,8 @@ test('session creation refreshes workspaceId paths after a gateway restart', asy
   const admin = fixture.db.getUserByUsername('admin')!;
   await fixture.auth.addSubUser({ userId: admin.id, username: admin.username, role: 'admin' }, 'guest', USER_PASSWORD);
   const guest = fixture.db.getUserByUsername('guest')!;
-  const root = mkdtempSync(path.join(os.tmpdir(), 'dshpw-refresh-root-'));
-  const outside = mkdtempSync(path.join(os.tmpdir(), 'dshpw-refresh-outside-'));
+  const root = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-refresh-root-'));
+  const outside = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-refresh-outside-'));
   const busyWorkspace = path.join(root, 'busy');
   mkdirSync(busyWorkspace);
   fixture.db.setPermissions(guest.id, {

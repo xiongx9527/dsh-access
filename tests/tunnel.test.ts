@@ -115,7 +115,7 @@ test('concurrent tunnel starts share one cloudflared process and stop clears pub
   let spawns = 0;
   let args: string[] = [];
   const tunnel = new CloudflaredTunnel({
-    home: '/tmp/dshpw-tunnel-test',
+    home: '/tmp/dsh-access-tunnel-test',
     ensureExecutable: async () => '/fake/cloudflared',
     spawnProcess: ((_file, spawnArgs) => { spawns += 1; args = [...spawnArgs]; return child; }) as never,
     now: () => 456,
@@ -141,7 +141,7 @@ test('stopping during cloudflared preparation cancels the pending launch', async
   const executable = new Promise<string>((resolve) => { release = resolve; });
   let spawns = 0;
   const tunnel = new CloudflaredTunnel({
-    home: '/tmp/dshpw-tunnel-cancel',
+    home: '/tmp/dsh-access-tunnel-cancel',
     ensureExecutable: async () => executable,
     spawnProcess: (() => { spawns += 1; return new FakeChild(); }) as never,
   });
@@ -160,7 +160,7 @@ import { join } from 'node:path';
 import { ensureCloudflared } from '../src/tunnel.js';
 
 test('ensureCloudflared copies a PATH binary into the Access management data directory', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'dshpw-cloudflared-'));
+  const root = mkdtempSync(join(tmpdir(), 'dsh-access-cloudflared-'));
   const pathDir = join(root, 'path');
   const home = join(root, 'home');
   mkdirSync(pathDir, { recursive: true });

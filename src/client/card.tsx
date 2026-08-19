@@ -3,9 +3,9 @@
 //   - 用户管理：改密/改名/子用户分配（主用户 admin 可管理所有，子用户只能改自己）
 // 数据面：/api/dsh-access/*（网关注入的 JWT cookie 鉴权）。
 //
-// 语言：卡片词典注册在 locale 命名空间 'dshpw'（见 locales.ts），文字跟随
+// 语言：卡片词典注册在 locale 命名空间 'dshaccess'（见 locales.ts），文字跟随
 // dsh 设置里的语言（Settings → General → Language）。t seat 由注册时的
-// `locale: 'dshpw'` 声明注入。
+// `locale: 'dshaccess'` 声明注入。
 import { createElement as h, useEffect, useState } from 'react';
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 import { RemoteAccessPanel } from './remote-access';
@@ -141,7 +141,7 @@ function errText(error: unknown, tr: (key: string, params?: Record<string, strin
   return tr('opFailed');
 }
 
-export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
+export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
   const t = props.t;
   const [data, setData] = useState<StateData | null>(null);
   const [patchState, setPatchState] = useState<PatchState | null>(null);
@@ -333,7 +333,7 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
       ? h(
           'select',
           {
-            className: 'dshpw-input',
+            className: 'dsh-access-input',
             value: value || me,
             onChange: (e: { target: { value: string } }) => onChange(e.target.value),
           },
@@ -365,29 +365,29 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
 
   const body = h(
     'div',
-    { className: 'dshpw-body' },
+    { className: 'dsh-access-body' },
     // ── 远程设置：状态 + 重载 ──
     h(
       'div',
-      { className: 'dshpw-section' },
-      h('span', { className: 'dshpw-label' }, t('patch')),
+      { className: 'dsh-access-section' },
+      h('span', { className: 'dsh-access-label' }, t('patch')),
       h(
         'div',
-        { className: 'dshpw-row' },
-        h('span', { className: patchPresentation === 'ok' ? 'dshpw-ok' : 'dshpw-error' }, patchText),
-        h('button', { className: 'dshpw-btn', disabled: busy, onClick: reloadPatch }, t('reloadPatch')),
+        { className: 'dsh-access-row' },
+        h('span', { className: patchPresentation === 'ok' ? 'dsh-access-ok' : 'dsh-access-error' }, patchText),
+        h('button', { className: 'dsh-access-btn', disabled: busy, onClick: reloadPatch }, t('reloadPatch')),
       ),
-      h('div', { className: 'dshpw-hint' }, t('patchHint1'), ' ', t('patchHint2')),
+      h('div', { className: 'dsh-access-hint' }, t('patchHint1'), ' ', t('patchHint2')),
       isAdmin &&
         h(
           'div',
-          { className: 'dshpw-gateway-port' },
-          h('span', { className: 'dshpw-hint' }, t('gatewayPort')),
+          { className: 'dsh-access-gateway-port' },
+          h('span', { className: 'dsh-access-hint' }, t('gatewayPort')),
           h(
             'div',
-            { className: 'dshpw-row' },
+            { className: 'dsh-access-row' },
             h('input', {
-              className: 'dshpw-input',
+              className: 'dsh-access-input',
               type: 'number',
               min: 1,
               max: 65535,
@@ -399,28 +399,28 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
             h(
               'button',
               {
-                className: 'dshpw-btn',
+                className: 'dsh-access-btn',
                 disabled: busy || gatewayPortDraft === '' || gatewayPortDraft === String(gatewayConfig?.port ?? ''),
                 onClick: saveGatewayPort,
               },
               t('saveGatewayPort'),
             ),
           ),
-          h('div', { className: 'dshpw-hint' }, t('gatewayPortHint', { port: gatewayConfig?.port ?? '—' })),
+          h('div', { className: 'dsh-access-hint' }, t('gatewayPortHint', { port: gatewayConfig?.port ?? '—' })),
         ),
     ),
 
     h(
       'div',
-      { className: 'dshpw-tabs', role: 'tablist', 'aria-label': t('settingsTabs') },
+      { className: 'dsh-access-tabs', role: 'tablist', 'aria-label': t('settingsTabs') },
       h('button', {
-        className: `dshpw-tab${activeTab === 'account' ? ' active' : ''}`,
+        className: `dsh-access-tab${activeTab === 'account' ? ' active' : ''}`,
         role: 'tab',
         'aria-selected': activeTab === 'account',
         onClick: () => setActiveTab('account'),
       }, t('accountTab')),
       isAdmin && h('button', {
-        className: `dshpw-tab${activeTab === 'remote' ? ' active' : ''}`,
+        className: `dsh-access-tab${activeTab === 'remote' ? ' active' : ''}`,
         role: 'tab',
         'aria-selected': activeTab === 'remote',
         onClick: () => setActiveTab('remote'),
@@ -429,16 +429,16 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
 
     activeTab === 'account' && h(
       'div',
-      { className: 'dshpw-tab-panel', role: 'tabpanel' },
+      { className: 'dsh-access-tab-panel', role: 'tabpanel' },
       // ── 修改密码 ──
       h(
       'div',
-      { className: 'dshpw-section' },
-      h('span', { className: 'dshpw-label' }, t('chgPw')),
-      isAdmin && h('span', { className: 'dshpw-hint' }, t('targetUser')),
+      { className: 'dsh-access-section' },
+      h('span', { className: 'dsh-access-label' }, t('chgPw')),
+      isAdmin && h('span', { className: 'dsh-access-hint' }, t('targetUser')),
       targetSelect(pwTarget, setPwTarget),
       h('input', {
-        className: 'dshpw-input',
+        className: 'dsh-access-input',
         type: 'password',
         autoComplete: 'current-password',
         placeholder: t('currentPwPh'),
@@ -446,7 +446,7 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
         onChange: (e: { target: { value: string } }) => setPwCurrent(e.target.value),
       }),
       h('input', {
-        className: 'dshpw-input',
+        className: 'dsh-access-input',
         type: 'password',
         autoComplete: 'new-password',
         placeholder: t('newPwPh'),
@@ -454,7 +454,7 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
         onChange: (e: { target: { value: string } }) => setPwNew(e.target.value),
       }),
       h('input', {
-        className: 'dshpw-input',
+        className: 'dsh-access-input',
         type: 'password',
         autoComplete: 'new-password',
         placeholder: t('confirmPwPh'),
@@ -463,40 +463,40 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
       }),
       h(
         'div',
-        { className: 'dshpw-row' },
-        h('button', { className: 'dshpw-btn', disabled: busy, onClick: changePassword }, t('savePw')),
+        { className: 'dsh-access-row' },
+        h('button', { className: 'dsh-access-btn', disabled: busy, onClick: changePassword }, t('savePw')),
       ),
     ),
 
     // ── 修改用户名 ──
     h(
       'div',
-      { className: 'dshpw-section' },
-      h('span', { className: 'dshpw-label' }, t('chgName')),
-      isAdmin && h('span', { className: 'dshpw-hint' }, t('targetUser')),
+      { className: 'dsh-access-section' },
+      h('span', { className: 'dsh-access-label' }, t('chgName')),
+      isAdmin && h('span', { className: 'dsh-access-hint' }, t('targetUser')),
       targetSelect(nameTarget, setNameTarget),
       h('input', {
-        className: 'dshpw-input',
+        className: 'dsh-access-input',
         placeholder: t('newNamePh'),
         value: nameNew,
         onChange: (e: { target: { value: string } }) => setNameNew(e.target.value),
       }),
       h(
         'div',
-        { className: 'dshpw-row' },
-        h('button', { className: 'dshpw-btn', disabled: busy, onClick: rename }, t('saveName')),
+        { className: 'dsh-access-row' },
+        h('button', { className: 'dsh-access-btn', disabled: busy, onClick: rename }, t('saveName')),
       ),
-      h('div', { className: 'dshpw-hint' }, t('nameHint')),
+      h('div', { className: 'dsh-access-hint' }, t('nameHint')),
     ),
 
     // ── 子用户管理与权限（仅主用户，点击用户行展开） ──
     isAdmin &&
       h(
         'div',
-        { className: 'dshpw-section' },
-        h('span', { className: 'dshpw-label' }, t('subusers')),
+        { className: 'dsh-access-section' },
+        h('span', { className: 'dsh-access-label' }, t('subusers')),
         h('input', {
-          className: 'dshpw-input dshpw-card-user-search',
+          className: 'dsh-access-input dsh-access-card-user-search',
           value: cardUserQuery,
           placeholder: t('accountSearchUsers'),
           onChange: (e: { target: { value: string } }) => setCardUserQuery(e.target.value),
@@ -507,58 +507,58 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
           const expanded = u.role === 'user' && expandedPermissionUserId === u.id;
           const identity = h(
             'span',
-            { className: 'dshpw-user-identity' },
+            { className: 'dsh-access-user-identity' },
             u.username,
             u.role === 'admin'
-              ? h('span', { className: 'dshpw-badge admin' }, t('owner'))
-              : h('span', { className: 'dshpw-badge' }, t('subuser')),
-            u.last_login_at ? h('span', { className: 'dshpw-hint' }, t('lastLogin', { time: u.last_login_at })) : null,
+              ? h('span', { className: 'dsh-access-badge admin' }, t('owner'))
+              : h('span', { className: 'dsh-access-badge' }, t('subuser')),
+            u.last_login_at ? h('span', { className: 'dsh-access-hint' }, t('lastLogin', { time: u.last_login_at })) : null,
           );
           return h(
             'div',
-            { className: 'dshpw-user-block', key: u.id },
+            { className: 'dsh-access-user-block', key: u.id },
             h(
               'div',
-              { className: 'dshpw-user' },
+              { className: 'dsh-access-user' },
               u.role === 'user'
                 ? h(
                     'button',
                     {
                       type: 'button',
-                      className: 'dshpw-user-toggle',
+                      className: 'dsh-access-user-toggle',
                       'aria-expanded': expandedPermissionUserId === u.id,
                       onClick: () => setExpandedPermissionUserId((current) => current === u.id ? null : u.id),
                     },
                     identity,
-                    h('span', { className: 'dshpw-user-chevron', 'aria-hidden': 'true' }, expanded ? '▴' : '▾'),
+                    h('span', { className: 'dsh-access-user-chevron', 'aria-hidden': 'true' }, expanded ? '▴' : '▾'),
                   )
                 : identity,
               u.username !== me
-                ? h('button', { className: 'dshpw-btn danger', disabled: busy, onClick: () => removeUser(u.username) }, t('remove'))
+                ? h('button', { className: 'dsh-access-btn danger', disabled: busy, onClick: () => removeUser(u.username) }, t('remove'))
                 : null,
             ),
             expanded
               ? permissionUser && d
                 ? h(
                     'div',
-                    { className: 'dshpw-perm dshpw-user-permission-editor' },
-                    h('div', { className: 'dshpw-hint' }, t('permsHint')),
+                    { className: 'dsh-access-perm dsh-access-user-permission-editor' },
+                    h('div', { className: 'dsh-access-hint' }, t('permsHint')),
                     h(
                       'div',
-                      { className: 'dshpw-perm-head' },
+                      { className: 'dsh-access-perm-head' },
                       permissionUser.usage
                         ? h(
                             'span',
-                            { className: 'dshpw-hint' },
+                            { className: 'dsh-access-hint' },
                             `${t('usageTime')} ${Math.round(permissionUser.usage.activeSeconds / 60)}m · ${t('usageTokens')} ${permissionUser.usage.hourlyTokens}`,
                           )
                         : null,
-                      permissionUser.permissions.banned ? h('span', { className: 'dshpw-badge' }, t('banned')) : null,
+                      permissionUser.permissions.banned ? h('span', { className: 'dsh-access-badge' }, t('banned')) : null,
                     ),
                     h(
                       'select',
                       {
-                        className: 'dshpw-input',
+                        className: 'dsh-access-input',
                         value: d.folders[0] ?? '',
                         'aria-label': t('permsFolders'),
                         onChange: (e: { target: { value: string } }) =>
@@ -576,7 +576,7 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
                     h(
                       'select',
                       {
-                        className: 'dshpw-input',
+                        className: 'dsh-access-input',
                         value: d.sandbox,
                         'aria-label': t('permsSandbox'),
                         onChange: (e: { target: { value: string } }) => setDraft(u.id, { sandbox: e.target.value }),
@@ -588,11 +588,11 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
                     ),
                     h(
                       'div',
-                      { className: 'dshpw-row' },
-                      h('label', { className: 'dshpw-limit-field' },
-                        h('span', { className: 'dshpw-limit-label' }, t('permsToken')),
+                      { className: 'dsh-access-row' },
+                      h('label', { className: 'dsh-access-limit-field' },
+                        h('span', { className: 'dsh-access-limit-label' }, t('permsToken')),
                         h('input', {
-                          className: 'dshpw-input',
+                          className: 'dsh-access-input',
                           type: 'number',
                           min: 0,
                           placeholder: t('permsToken'),
@@ -600,10 +600,10 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
                           onChange: (e: { target: { value: string } }) => setDraft(u.id, { token: e.target.value }),
                         }),
                       ),
-                      h('label', { className: 'dshpw-limit-field' },
-                        h('span', { className: 'dshpw-limit-label' }, t('permsMinutes')),
+                      h('label', { className: 'dsh-access-limit-field' },
+                        h('span', { className: 'dsh-access-limit-label' }, t('permsMinutes')),
                         h('input', {
-                          className: 'dshpw-input',
+                          className: 'dsh-access-input',
                           type: 'number',
                           min: 0,
                           placeholder: t('permsMinutes'),
@@ -614,54 +614,54 @@ export function AccessManagementSection(props: PropsLocale<'dshpw'>) {
                     ),
                     h(
                       'div',
-                      { className: 'dshpw-row' },
-                      h('label', { className: 'dshpw-check' },
+                      { className: 'dsh-access-row' },
+                      h('label', { className: 'dsh-access-check' },
                         h('input', { type: 'checkbox', checked: d.upload, onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { upload: e.target.checked }) }),
                         t('permsUpload'),
                       ),
-                      h('label', { className: 'dshpw-check' },
+                      h('label', { className: 'dsh-access-check' },
                         h('input', { type: 'checkbox', checked: d.git, onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { git: e.target.checked }) }),
                         t('permsGit'),
                       ),
-                      h('label', { className: 'dshpw-check' },
+                      h('label', { className: 'dsh-access-check' },
                         h('input', { type: 'checkbox', checked: d.banned, onChange: (e: { target: { checked: boolean } }) => setDraft(u.id, { banned: e.target.checked }) }),
                         t('permsBanned'),
                       ),
                     ),
-                    h('div', { className: 'dshpw-row' },
-                      h('button', { className: 'dshpw-btn', disabled: busy, onClick: () => savePermissions(u.id) }, t('permsSave')),
+                    h('div', { className: 'dsh-access-row' },
+                      h('button', { className: 'dsh-access-btn', disabled: busy, onClick: () => savePermissions(u.id) }, t('permsSave')),
                     ),
                   )
-                : h('div', { className: 'dshpw-hint dshpw-user-permission-editor' }, t('accountLoading'))
+                : h('div', { className: 'dsh-access-hint dsh-access-user-permission-editor' }, t('accountLoading'))
               : null,
           );
         }),
         h('input', {
-          className: 'dshpw-input',
+          className: 'dsh-access-input',
           placeholder: t('subNamePh'),
           value: addName,
           onChange: (e: { target: { value: string } }) => setAddName(e.target.value),
         }),
         h('input', {
-          className: 'dshpw-input',
+          className: 'dsh-access-input',
           type: 'password',
           autoComplete: 'new-password',
           placeholder: t('subPwPh'),
           value: addPw,
           onChange: (e: { target: { value: string } }) => setAddPw(e.target.value),
         }),
-        h('div', { className: 'dshpw-row' },
-          h('button', { className: 'dshpw-btn', disabled: busy, onClick: addSubUser }, t('addSub')),
+        h('div', { className: 'dsh-access-row' },
+          h('button', { className: 'dsh-access-btn', disabled: busy, onClick: addSubUser }, t('addSub')),
         ),
-        h('div', { className: 'dshpw-hint' }, t('subHint')),
+        h('div', { className: 'dsh-access-hint' }, t('subHint')),
       ),
     ),
 
     activeTab === 'remote' && isAdmin && h(RemoteAccessPanel, { t, refreshKey: remoteRefreshKey }),
 
-    error && h('div', { className: 'dshpw-error' }, error),
-    notice && h('div', { className: 'dshpw-ok' }, notice),
+    error && h('div', { className: 'dsh-access-error' }, error),
+    notice && h('div', { className: 'dsh-access-ok' }, notice),
   );
 
-  return h('div', { className: 'dshpw-card open' }, body);
+  return h('div', { className: 'dsh-access-card open' }, body);
 }

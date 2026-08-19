@@ -7,9 +7,9 @@ test('client registers a mobile sidebar toggle and 320px-safe layout rules', () 
   const mobile = readFileSync(new URL('../src/client/mobile.tsx', import.meta.url), 'utf8');
   assert.match(client, /dsh-access-mobile-nav/);
   assert.match(client, /@media\(max-width:640px\)/);
-  assert.match(client, /data-dshpw-mobile-nav-open/);
+  assert.match(client, /data-dsh-access-mobile-nav-open/);
   assert.match(client, /overflow-x:hidden/);
   assert.match(mobile, /matchMedia\(MOBILE_QUERY\)/);
   assert.match(mobile, /aria-expanded/);
-  assert.match(mobile, /dshpw-mobile-backdrop/);
+  assert.match(mobile, /dsh-access-mobile-backdrop/);
 });

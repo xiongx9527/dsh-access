@@ -135,7 +135,7 @@ test('admin overview includes account remark while the subuser current-account r
 test('admin creates a username-mode subuser with one registered workspace root', async (t) => {
   const fixture = createAuthFixture();
   await fixture.auth.setup({ setupKey: fixture.config.setupKey, username: 'admin', password: ADMIN_PASSWORD });
-  const baseRoot = (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).default.tmpdir(), 'dshpw-api-users-'));
+  const baseRoot = (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).default.tmpdir(), 'dsh-access-api-users-'));
   (fixture.config as typeof fixture.config & { workspaceRoot: string }).workspaceRoot = baseRoot;
   const registered: string[] = [];
   const server = createGatewayServer(fixture.config, fixture.auth, fixture.db, {
@@ -192,7 +192,7 @@ test('deleting a subuser removes the account but preserves its workspace files',
   const fixture = await startFixture();
   t.after(fixture.close);
   const fs = await import('node:fs');
-  const temp = fs.mkdtempSync((await import('node:path')).join((await import('node:os')).default.tmpdir(), 'dshpw-delete-user-'));
+  const temp = fs.mkdtempSync((await import('node:path')).join((await import('node:os')).default.tmpdir(), 'dsh-access-delete-user-'));
   const marker = (await import('node:path')).join(temp, 'keep.txt');
   fs.writeFileSync(marker, 'keep');
   const current = fixture.db.getPermissions(fixture.guest.id)!;
@@ -231,7 +231,7 @@ test('admin directory browser lists directories for specified workspace selectio
   const fs = await import('node:fs');
   const pathModule = await import('node:path');
   const osModule = await import('node:os');
-  const root = fs.mkdtempSync(pathModule.join(osModule.default.tmpdir(), 'dshpw-directory-browser-'));
+  const root = fs.mkdtempSync(pathModule.join(osModule.default.tmpdir(), 'dsh-access-directory-browser-'));
   fs.mkdirSync(pathModule.join(root, 'alpha'));
   fs.mkdirSync(pathModule.join(root, 'beta'));
   fs.writeFileSync(pathModule.join(root, 'not-a-directory.txt'), 'x');

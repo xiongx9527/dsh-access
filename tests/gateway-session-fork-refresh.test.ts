@@ -24,8 +24,8 @@ test('session fork refreshes sessionId paths and enforces the guest workspace bo
   const admin = fixture.db.getUserByUsername('admin')!;
   await fixture.auth.addSubUser({ userId: admin.id, username: admin.username, role: 'admin' }, 'guest', USER_PASSWORD);
   const guest = fixture.db.getUserByUsername('guest')!;
-  const root = mkdtempSync(path.join(os.tmpdir(), 'dshpw-fork-root-'));
-  const outside = mkdtempSync(path.join(os.tmpdir(), 'dshpw-fork-outside-'));
+  const root = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-fork-root-'));
+  const outside = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-fork-outside-'));
   fixture.db.setPermissions(guest.id, {
     allowedFolders: [root], hourlyTokenLimit: null, dailyMinutesLimit: null,
     allowUpload: false, allowGitDownload: false, banned: false,

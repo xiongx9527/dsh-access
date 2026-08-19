@@ -12,7 +12,7 @@ async function loadPolicy() {
 
 test('existing file through a symlink that escapes the workspace root is denied', async () => {
   const policy = await loadPolicy();
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dshpw-path-'));
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-path-'));
   const root = path.join(temp, 'root');
   const outside = path.join(temp, 'outside');
   mkdirSync(root);
@@ -26,7 +26,7 @@ test('existing file through a symlink that escapes the workspace root is denied'
 
 test('new target uses the nearest existing parent realpath and rejects a symlink escape', async () => {
   const policy = await loadPolicy();
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dshpw-new-path-'));
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-new-path-'));
   const root = path.join(temp, 'root');
   const outside = path.join(temp, 'outside');
   mkdirSync(root);
@@ -41,7 +41,7 @@ test('new target uses the nearest existing parent realpath and rejects a symlink
 
 test('a missing child below the real workspace root is authorized without creating it', async () => {
   const policy = await loadPolicy();
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dshpw-child-path-'));
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-child-path-'));
   const root = path.join(temp, 'root');
   mkdirSync(root);
 
@@ -53,7 +53,7 @@ test('a missing child below the real workspace root is authorized without creati
 
 test('encoded traversal and paths outside the root are denied before execution', async () => {
   const policy = await loadPolicy();
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dshpw-encoded-path-'));
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-encoded-path-'));
   const root = path.join(temp, 'root');
   mkdirSync(root);
 

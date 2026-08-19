@@ -37,8 +37,8 @@ test('mobile navigation helper toggles the document marker', () => {
   setMobileNavigationOpen(true, { toggleAttribute: (name, force) => { calls.push([name, Boolean(force)]); return true; } });
   setMobileNavigationOpen(false, { toggleAttribute: (name, force) => { calls.push([name, Boolean(force)]); return false; } });
   assert.deepEqual(calls, [
-    ['data-dshpw-mobile-nav-open', true],
-    ['data-dshpw-mobile-nav-open', false],
+    ['data-dsh-access-mobile-nav-open', true],
+    ['data-dsh-access-mobile-nav-open', false],
   ]);
 });
 
@@ -51,7 +51,7 @@ test('mobile navigation includes drawer, safe-area and touch affordances', () =>
   assert.match(source, /safe-area-inset-bottom/);
   assert.match(source, /touch-action:manipulation/);
   assert.match(source, /overflow-y:auto/);
-  assert.match(source, /data-dshpw-mobile-nav-open/);
-  assert.match(chatSource, /dshpw-chat-fab\{[^}]*safe-area-inset-left/);
-  assert.match(chatSource, /dshpw-chat-close\{width:44px;height:44px/);
+  assert.match(source, /data-dsh-access-mobile-nav-open/);
+  assert.match(chatSource, /dsh-access-chat-fab\{[^}]*safe-area-inset-left/);
+  assert.match(chatSource, /dsh-access-chat-close\{width:44px;height:44px/);
 });

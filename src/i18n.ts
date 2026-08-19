@@ -2,7 +2,7 @@
 //
 // 网关页面语言解析顺序（resolveGatewayLang）：
 //   1. ?lang= 查询参数（语言切换链接点出来的）
-//   2. cookie dshpw_lang（用户手动切换后的持久选择）
+//   2. cookie dsh-access-lang（用户手动切换后的持久选择）
 //   3. dsh settings.yaml 的 locale.preference —— 跟随 dsh 设置里的语言
 //   4. Accept-Language（浏览器语言）
 //   5. 默认 zh

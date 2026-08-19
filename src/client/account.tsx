@@ -93,7 +93,7 @@ function draftOf(user: ManagedUser): UserDraft {
   };
 }
 
-function AdminAccountCenter(props: { close: () => void } & PropsLocale<'dshpw'>) {
+function AdminAccountCenter(props: { close: () => void } & PropsLocale<'dshaccess'>) {
   const { close, t } = props;
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [drafts, setDrafts] = useState<Record<number, UserDraft>>({});
@@ -212,165 +212,165 @@ function AdminAccountCenter(props: { close: () => void } & PropsLocale<'dshpw'>)
 
   return createPortal(h(
     'div',
-    { className: 'dshpw-admin-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('accountManage') },
+    { className: 'dsh-access-admin-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('accountManage') },
     h(
       'div',
-      { className: 'dshpw-admin-panel' },
+      { className: 'dsh-access-admin-panel' },
       h(
         'div',
-        { className: 'dshpw-admin-head' },
+        { className: 'dsh-access-admin-head' },
         h('div', null, h('h2', null, t('accountManage')), h('p', null, t('accountManageHint'))),
-        h('button', { type: 'button', className: 'dshpw-admin-close', onClick: close, 'aria-label': t('chat.close') }, '×'),
+        h('button', { type: 'button', className: 'dsh-access-admin-close', onClick: close, 'aria-label': t('chat.close') }, '×'),
       ),
-      window.location.protocol === 'http:' ? h('div', { className: 'dshpw-account-warning' }, t('httpWarning')) : null,
-      error ? h('div', { className: 'dshpw-error' }, error) : null,
-      notice ? h('div', { className: 'dshpw-ok' }, notice) : null,
+      window.location.protocol === 'http:' ? h('div', { className: 'dsh-access-account-warning' }, t('httpWarning')) : null,
+      error ? h('div', { className: 'dsh-access-error' }, error) : null,
+      notice ? h('div', { className: 'dsh-access-ok' }, notice) : null,
       h(
         'section',
-        { className: 'dshpw-admin-section' },
+        { className: 'dsh-access-admin-section' },
         h('h3', null, t('addSub')),
         h(
           'div',
-          { className: 'dshpw-admin-grid' },
-          h('input', { className: 'dshpw-input', value: form.username, placeholder: t('subNamePh'), onChange: (e: Event) => setForm({ ...form, username: (e.target as HTMLInputElement).value }) }),
-          h('input', { className: 'dshpw-input', type: 'password', value: form.password, placeholder: t('subPwPh'), onChange: (e: Event) => setForm({ ...form, password: (e.target as HTMLInputElement).value }) }),
+          { className: 'dsh-access-admin-grid' },
+          h('input', { className: 'dsh-access-input', value: form.username, placeholder: t('subNamePh'), onChange: (e: Event) => setForm({ ...form, username: (e.target as HTMLInputElement).value }) }),
+          h('input', { className: 'dsh-access-input', type: 'password', value: form.password, placeholder: t('subPwPh'), onChange: (e: Event) => setForm({ ...form, password: (e.target as HTMLInputElement).value }) }),
           h(
             'select',
-            { className: 'dshpw-input', value: form.workspaceMode, onChange: (e: Event) => setForm({ ...form, workspaceMode: (e.target as HTMLSelectElement).value as AccountForm['workspaceMode'] }) },
+            { className: 'dsh-access-input', value: form.workspaceMode, onChange: (e: Event) => setForm({ ...form, workspaceMode: (e.target as HTMLSelectElement).value as AccountForm['workspaceMode'] }) },
             h('option', { value: 'username' }, t('workspaceByUsername')),
             h('option', { value: 'specified' }, t('workspaceSpecified')),
           ),
-          h('input', { className: 'dshpw-input', value: form.remark, placeholder: t('accountRemark'), onChange: (e: Event) => setForm({ ...form, remark: (e.target as HTMLInputElement).value }) }),
+          h('input', { className: 'dsh-access-input', value: form.remark, placeholder: t('accountRemark'), onChange: (e: Event) => setForm({ ...form, remark: (e.target as HTMLInputElement).value }) }),
         ),
         form.workspaceMode === 'specified'
           ? h(
               'div',
-              { className: 'dshpw-directory-row' },
-              h('input', { className: 'dshpw-input', value: form.workspaceRoot, placeholder: t('workspaceDirectory'), onChange: (e: Event) => setForm({ ...form, workspaceRoot: (e.target as HTMLInputElement).value }) }),
-              h('button', { type: 'button', className: 'dshpw-btn', disabled: busy === 'browse', onClick: () => void browse(form.workspaceRoot, { kind: 'create' }) }, t('chooseDirectory')),
+              { className: 'dsh-access-directory-row' },
+              h('input', { className: 'dsh-access-input', value: form.workspaceRoot, placeholder: t('workspaceDirectory'), onChange: (e: Event) => setForm({ ...form, workspaceRoot: (e.target as HTMLInputElement).value }) }),
+              h('button', { type: 'button', className: 'dsh-access-btn', disabled: busy === 'browse', onClick: () => void browse(form.workspaceRoot, { kind: 'create' }) }, t('chooseDirectory')),
             )
-          : h('div', { className: 'dshpw-hint' }, t('workspaceUsernameHint')),
+          : h('div', { className: 'dsh-access-hint' }, t('workspaceUsernameHint')),
         h(
           'select',
-          { className: 'dshpw-input', value: form.sandboxMode, onChange: (e: Event) => setForm({ ...form, sandboxMode: (e.target as HTMLSelectElement).value as AccountForm['sandboxMode'] }) },
+          { className: 'dsh-access-input', value: form.sandboxMode, onChange: (e: Event) => setForm({ ...form, sandboxMode: (e.target as HTMLSelectElement).value as AccountForm['sandboxMode'] }) },
           h('option', { value: 'read-only' }, t('sandboxReadOnly')),
           h('option', { value: 'workspace-write' }, t('sandboxWorkspace')),
           h('option', { value: 'danger-full-access' }, t('sandboxFull')),
         ),
-        h('div', { className: 'dshpw-row' },
-          h('label', { className: 'dshpw-check' }, h('input', { type: 'checkbox', checked: form.allowUpload, onChange: (e: Event) => setForm({ ...form, allowUpload: (e.target as HTMLInputElement).checked }) }), t('permsUpload')),
-          h('label', { className: 'dshpw-check' }, h('input', { type: 'checkbox', checked: form.allowGitDownload, onChange: (e: Event) => setForm({ ...form, allowGitDownload: (e.target as HTMLInputElement).checked }) }), t('permsGit')),
+        h('div', { className: 'dsh-access-row' },
+          h('label', { className: 'dsh-access-check' }, h('input', { type: 'checkbox', checked: form.allowUpload, onChange: (e: Event) => setForm({ ...form, allowUpload: (e.target as HTMLInputElement).checked }) }), t('permsUpload')),
+          h('label', { className: 'dsh-access-check' }, h('input', { type: 'checkbox', checked: form.allowGitDownload, onChange: (e: Event) => setForm({ ...form, allowGitDownload: (e.target as HTMLInputElement).checked }) }), t('permsGit')),
         ),
-        h('button', { type: 'button', className: 'dshpw-btn', disabled: busy === 'create', onClick: () => void createUser() }, busy === 'create' ? t('accountSaving') : t('addSub')),
+        h('button', { type: 'button', className: 'dsh-access-btn', disabled: busy === 'create', onClick: () => void createUser() }, busy === 'create' ? t('accountSaving') : t('addSub')),
       ),
       picker
         ? h(
             'div',
-            { className: 'dshpw-directory-picker' },
-            h('div', { className: 'dshpw-directory-head' },
+            { className: 'dsh-access-directory-picker' },
+            h('div', { className: 'dsh-access-directory-head' },
               h('strong', { title: picker.current }, picker.current),
-              h('button', { type: 'button', className: 'dshpw-admin-close', onClick: () => setPicker(null) }, '×'),
+              h('button', { type: 'button', className: 'dsh-access-admin-close', onClick: () => setPicker(null) }, '×'),
             ),
-            h('div', { className: 'dshpw-directory-actions' },
-              picker.parent ? h('button', { type: 'button', className: 'dshpw-btn', onClick: () => void browse(picker.parent!) }, t('parentDirectory')) : null,
-              h('button', { type: 'button', className: 'dshpw-btn', onClick: () => {
+            h('div', { className: 'dsh-access-directory-actions' },
+              picker.parent ? h('button', { type: 'button', className: 'dsh-access-btn', onClick: () => void browse(picker.parent!) }, t('parentDirectory')) : null,
+              h('button', { type: 'button', className: 'dsh-access-btn', onClick: () => {
                 if (pickerTarget.kind === 'create') setForm({ ...form, workspaceRoot: picker.current });
                 else updateDraft(pickerTarget.userId, { workspaceRoot: picker.current, workspaceMode: 'specified' });
                 setPicker(null);
               } }, t('useDirectory')),
             ),
-            h('div', { className: 'dshpw-directory-list' },
+            h('div', { className: 'dsh-access-directory-list' },
               ...picker.entries.map((entry) => h('button', { key: entry.path, type: 'button', onClick: () => void browse(entry.path), title: entry.path }, `📁 ${entry.name}`)),
             ),
           )
         : null,
       h(
         'section',
-        { className: 'dshpw-admin-section' },
-        h('div', { className: 'dshpw-admin-section-title' },
+        { className: 'dsh-access-admin-section' },
+        h('div', { className: 'dsh-access-admin-section-title' },
           h('h3', null, t('subusers')),
-          h('button', { type: 'button', className: 'dshpw-btn', onClick: () => void load() }, t('accountRefresh')),
+          h('button', { type: 'button', className: 'dsh-access-btn', onClick: () => void load() }, t('accountRefresh')),
         ),
         h(
           'div',
-          { className: 'dshpw-admin-user-list' },
+          { className: 'dsh-access-admin-user-list' },
           h('input', {
-            className: 'dshpw-input dshpw-admin-user-search',
+            className: 'dsh-access-input dsh-access-admin-user-search',
             value: userQuery,
             placeholder: t('accountSearchUsers'),
             onChange: (e: Event) => setUserQuery((e.target as HTMLInputElement).value),
           }),
-          loading ? h('div', { className: 'dshpw-hint' }, t('accountLoading')) : null,
-          !loading && visibleUsers.length === 0 ? h('div', { className: 'dshpw-hint' }, t('accountNoUsers')) : null,
+          loading ? h('div', { className: 'dsh-access-hint' }, t('accountLoading')) : null,
+          !loading && visibleUsers.length === 0 ? h('div', { className: 'dsh-access-hint' }, t('accountNoUsers')) : null,
         ...visibleUsers.map((user) => {
           const draft = drafts[user.id] ?? draftOf(user);
           const expanded = expandedManagedUserId === user.id;
           return h(
             'div',
-            { key: user.id, className: 'dshpw-admin-user' },
-            h('div', { className: 'dshpw-admin-user-head' },
+            { key: user.id, className: 'dsh-access-admin-user' },
+            h('div', { className: 'dsh-access-admin-user-head' },
               h(
                 'button',
                 {
                   type: 'button',
-                  className: 'dshpw-admin-user-toggle',
+                  className: 'dsh-access-admin-user-toggle',
                   'aria-expanded': expandedManagedUserId === user.id,
                   onClick: () => setExpandedManagedUserId((current) => current === user.id ? null : user.id),
                 },
-                h('span', { className: 'dshpw-admin-user-identity' },
+                h('span', { className: 'dsh-access-admin-user-identity' },
                   h('strong', null, user.username),
-                  draft.remark ? h('span', { className: 'dshpw-admin-user-summary' }, draft.remark) : null,
-                  h('span', { className: 'dshpw-admin-user-last-login' },
+                  draft.remark ? h('span', { className: 'dsh-access-admin-user-summary' }, draft.remark) : null,
+                  h('span', { className: 'dsh-access-admin-user-last-login' },
                     user.lastLoginAt ? t('lastLogin', { time: user.lastLoginAt }) : t('neverLoggedIn'),
                   ),
-                  draft.banned ? h('span', { className: 'dshpw-badge admin' }, t('banned')) : null,
+                  draft.banned ? h('span', { className: 'dsh-access-badge admin' }, t('banned')) : null,
                 ),
-                h('span', { className: 'dshpw-admin-user-chevron', 'aria-hidden': 'true' }, expanded ? '▴' : '▾'),
+                h('span', { className: 'dsh-access-admin-user-chevron', 'aria-hidden': 'true' }, expanded ? '▴' : '▾'),
               ),
               h('button', {
                 type: 'button',
-                className: 'dshpw-admin-user-delete',
+                className: 'dsh-access-admin-user-delete',
                 disabled: busy === `delete:${user.id}`,
                 onClick: () => void removeUser(user),
               }, t('remove')),
             ),
             expanded ? h(
               'div',
-              { className: 'dshpw-admin-user-details' },
-              h('input', { className: 'dshpw-input', value: draft.remark, placeholder: t('accountRemark'), onChange: (e: Event) => updateDraft(user.id, { remark: (e.target as HTMLInputElement).value }) }),
-              h('select', { className: 'dshpw-input', value: draft.workspaceMode, onChange: (e: Event) => updateDraft(user.id, { workspaceMode: (e.target as HTMLSelectElement).value as UserDraft['workspaceMode'] }) },
+              { className: 'dsh-access-admin-user-details' },
+              h('input', { className: 'dsh-access-input', value: draft.remark, placeholder: t('accountRemark'), onChange: (e: Event) => updateDraft(user.id, { remark: (e.target as HTMLInputElement).value }) }),
+              h('select', { className: 'dsh-access-input', value: draft.workspaceMode, onChange: (e: Event) => updateDraft(user.id, { workspaceMode: (e.target as HTMLSelectElement).value as UserDraft['workspaceMode'] }) },
                 h('option', { value: 'username' }, t('workspaceByUsername')),
                 h('option', { value: 'specified' }, t('workspaceSpecified')),
               ),
               draft.workspaceMode === 'specified'
-                ? h('div', { className: 'dshpw-directory-row' },
-                    h('input', { className: 'dshpw-input', value: draft.workspaceRoot, placeholder: t('workspaceDirectory'), onChange: (e: Event) => updateDraft(user.id, { workspaceRoot: (e.target as HTMLInputElement).value }) }),
-                    h('button', { type: 'button', className: 'dshpw-btn', onClick: () => void browse(draft.workspaceRoot, { kind: 'user', userId: user.id }) }, t('chooseDirectory')),
+                ? h('div', { className: 'dsh-access-directory-row' },
+                    h('input', { className: 'dsh-access-input', value: draft.workspaceRoot, placeholder: t('workspaceDirectory'), onChange: (e: Event) => updateDraft(user.id, { workspaceRoot: (e.target as HTMLInputElement).value }) }),
+                    h('button', { type: 'button', className: 'dsh-access-btn', onClick: () => void browse(draft.workspaceRoot, { kind: 'user', userId: user.id }) }, t('chooseDirectory')),
                   )
-                : h('div', { className: 'dshpw-hint' }, t('workspaceUsernameHint')),
-              h('div', { className: 'dshpw-hint dshpw-admin-user-workspace', title: draft.workspaceRoot }, `${t('workspaceLabel')}: ${draft.workspaceRoot || t('workspaceNeedsRepair')}`),
-              h('div', { className: 'dshpw-admin-grid' },
-                h('label', { className: 'dshpw-limit-field' },
-                  h('span', { className: 'dshpw-limit-label' }, t('permsToken')),
-                  h('input', { className: 'dshpw-input', type: 'number', min: 0, inputMode: 'numeric', value: draft.hourlyTokenLimit, placeholder: t('permsToken'), onChange: (e: Event) => updateDraft(user.id, { hourlyTokenLimit: (e.target as HTMLInputElement).value }) }),
+                : h('div', { className: 'dsh-access-hint' }, t('workspaceUsernameHint')),
+              h('div', { className: 'dsh-access-hint dsh-access-admin-user-workspace', title: draft.workspaceRoot }, `${t('workspaceLabel')}: ${draft.workspaceRoot || t('workspaceNeedsRepair')}`),
+              h('div', { className: 'dsh-access-admin-grid' },
+                h('label', { className: 'dsh-access-limit-field' },
+                  h('span', { className: 'dsh-access-limit-label' }, t('permsToken')),
+                  h('input', { className: 'dsh-access-input', type: 'number', min: 0, inputMode: 'numeric', value: draft.hourlyTokenLimit, placeholder: t('permsToken'), onChange: (e: Event) => updateDraft(user.id, { hourlyTokenLimit: (e.target as HTMLInputElement).value }) }),
                 ),
-                h('label', { className: 'dshpw-limit-field' },
-                  h('span', { className: 'dshpw-limit-label' }, t('permsMinutes')),
-                  h('input', { className: 'dshpw-input', type: 'number', min: 0, inputMode: 'numeric', value: draft.dailyMinutesLimit, placeholder: t('permsMinutes'), onChange: (e: Event) => updateDraft(user.id, { dailyMinutesLimit: (e.target as HTMLInputElement).value }) }),
+                h('label', { className: 'dsh-access-limit-field' },
+                  h('span', { className: 'dsh-access-limit-label' }, t('permsMinutes')),
+                  h('input', { className: 'dsh-access-input', type: 'number', min: 0, inputMode: 'numeric', value: draft.dailyMinutesLimit, placeholder: t('permsMinutes'), onChange: (e: Event) => updateDraft(user.id, { dailyMinutesLimit: (e.target as HTMLInputElement).value }) }),
                 ),
               ),
-              h('select', { className: 'dshpw-input', value: draft.sandboxMode, onChange: (e: Event) => updateDraft(user.id, { sandboxMode: (e.target as HTMLSelectElement).value }) },
+              h('select', { className: 'dsh-access-input', value: draft.sandboxMode, onChange: (e: Event) => updateDraft(user.id, { sandboxMode: (e.target as HTMLSelectElement).value }) },
                 h('option', { value: 'read-only' }, t('sandboxReadOnly')),
                 h('option', { value: 'workspace-write' }, t('sandboxWorkspace')),
                 h('option', { value: 'danger-full-access' }, t('sandboxFull')),
               ),
-              h('div', { className: 'dshpw-row' },
-                h('label', { className: 'dshpw-check' }, h('input', { type: 'checkbox', checked: draft.allowUpload, onChange: (e: Event) => updateDraft(user.id, { allowUpload: (e.target as HTMLInputElement).checked }) }), t('permsUpload')),
-                h('label', { className: 'dshpw-check' }, h('input', { type: 'checkbox', checked: draft.allowGitDownload, onChange: (e: Event) => updateDraft(user.id, { allowGitDownload: (e.target as HTMLInputElement).checked }) }), t('permsGit')),
-                h('label', { className: 'dshpw-check' }, h('input', { type: 'checkbox', checked: draft.banned, onChange: (e: Event) => updateDraft(user.id, { banned: (e.target as HTMLInputElement).checked }) }), t('permsBanned')),
+              h('div', { className: 'dsh-access-row' },
+                h('label', { className: 'dsh-access-check' }, h('input', { type: 'checkbox', checked: draft.allowUpload, onChange: (e: Event) => updateDraft(user.id, { allowUpload: (e.target as HTMLInputElement).checked }) }), t('permsUpload')),
+                h('label', { className: 'dsh-access-check' }, h('input', { type: 'checkbox', checked: draft.allowGitDownload, onChange: (e: Event) => updateDraft(user.id, { allowGitDownload: (e.target as HTMLInputElement).checked }) }), t('permsGit')),
+                h('label', { className: 'dsh-access-check' }, h('input', { type: 'checkbox', checked: draft.banned, onChange: (e: Event) => updateDraft(user.id, { banned: (e.target as HTMLInputElement).checked }) }), t('permsBanned')),
               ),
-              h('div', { className: 'dshpw-row' },
-                h('button', { type: 'button', className: 'dshpw-btn', disabled: busy === `save:${user.id}`, onClick: () => void saveUser(user) }, t('permsSave')),
+              h('div', { className: 'dsh-access-row' },
+                h('button', { type: 'button', className: 'dsh-access-btn', disabled: busy === `save:${user.id}`, onClick: () => void saveUser(user) }, t('permsSave')),
               ),
             ) : null,
           );
@@ -381,7 +381,7 @@ function AdminAccountCenter(props: { close: () => void } & PropsLocale<'dshpw'>)
   ), document.body);
 }
 
-export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshpw'>) {
+export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshaccess'>) {
   const { wide, t } = props;
   const root = useRef<HTMLDivElement | null>(null);
   const popover = useRef<HTMLDivElement | null>(null);
@@ -453,7 +453,7 @@ export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshpw'>) {
   const role = me?.role === 'admin' ? t('roleAdmin') : t('roleUser');
   const workspace = me?.workspaceRoot || t('workspaceNeedsRepair');
   const accountPopover = h('div', {
-    className: 'dshpw-account-popover',
+    className: 'dsh-access-account-popover',
     ref: popover,
     role: 'dialog',
     'aria-label': t('accountTitle'),
@@ -461,36 +461,36 @@ export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshpw'>) {
       ? { left: popoverPosition.left, top: popoverPosition.top }
       : { left: 12, top: 12, visibility: 'hidden' as const },
   },
-  h('div', { className: 'dshpw-account-title' }, me?.username ?? t('accountLoading')),
-  h('div', { className: 'dshpw-account-role' }, role),
-  me?.role === 'admin' && window.location.protocol === 'http:' ? h('div', { className: 'dshpw-account-warning' }, t('httpWarning')) : null,
-  me?.role === 'user' ? h('dl', { className: 'dshpw-account-summary' },
-    h('dt', null, t('workspaceLabel')), h('dd', { className: 'dshpw-account-workspace', title: workspace }, workspace),
+  h('div', { className: 'dsh-access-account-title' }, me?.username ?? t('accountLoading')),
+  h('div', { className: 'dsh-access-account-role' }, role),
+  me?.role === 'admin' && window.location.protocol === 'http:' ? h('div', { className: 'dsh-access-account-warning' }, t('httpWarning')) : null,
+  me?.role === 'user' ? h('dl', { className: 'dsh-access-account-summary' },
+    h('dt', null, t('workspaceLabel')), h('dd', { className: 'dsh-access-account-workspace', title: workspace }, workspace),
     h('dt', null, t('sandboxLabel')), h('dd', null, me.sandboxMode ?? '-'),
     h('dt', null, t('uploadLabel')), h('dd', null, me.allowUpload ? t('yes') : t('no')),
     h('dt', null, t('gitLabel')), h('dd', null, me.allowGitDownload ? t('yes') : t('no')),
   ) : null,
-  me?.role === 'admin' ? h('button', { type: 'button', className: 'dshpw-account-manage', onClick: () => { setOpen(false); setAdminOpen(true); } }, t('accountManage')) : null,
-  error ? h('div', { className: 'dshpw-error' }, error) : null,
-  h('button', { type: 'button', className: 'dshpw-account-logout', disabled: busy, onClick: logout }, busy ? t('loggingOut') : t('logout')),
+  me?.role === 'admin' ? h('button', { type: 'button', className: 'dsh-access-account-manage', onClick: () => { setOpen(false); setAdminOpen(true); } }, t('accountManage')) : null,
+  error ? h('div', { className: 'dsh-access-error' }, error) : null,
+  h('button', { type: 'button', className: 'dsh-access-account-logout', disabled: busy, onClick: logout }, busy ? t('loggingOut') : t('logout')),
   );
 
   return h(
     'div',
-    { className: 'dshpw-account-wrap', ref: root },
+    { className: 'dsh-access-account-wrap', ref: root },
     h('button', {
-      type: 'button', className: `dshpw-account-trigger${wide ? '' : ' rail'}`,
+      type: 'button', className: `dsh-access-account-trigger${wide ? '' : ' rail'}`,
       'aria-label': me ? `${me.username} (${role})` : t('accountLoading'),
       'aria-expanded': open, onClick: () => {
         setPopoverPosition(null);
         setOpen((value) => !value);
       },
     },
-    h('svg', { className: 'dshpw-account-icon', width: wide ? 16 : 18, height: wide ? 16 : 18, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' },
+    h('svg', { className: 'dsh-access-account-icon', width: wide ? 16 : 18, height: wide ? 16 : 18, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' },
       h('circle', { cx: 12, cy: 8, r: 3.2, stroke: 'currentColor', strokeWidth: 1.8 }),
       h('path', { d: 'M5.5 20c.6-4 2.8-6 6.5-6s5.9 2 6.5 6', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' }),
     ),
-    wide && h('span', { className: 'dshpw-account-label' }, me?.username ?? t('accountLoading'))),
+    wide && h('span', { className: 'dsh-access-account-label' }, me?.username ?? t('accountLoading'))),
     open ? createPortal(accountPopover, document.body) : null,
     adminOpen ? h(AdminAccountCenter, { t, close: () => setAdminOpen(false) }) : null,
   );

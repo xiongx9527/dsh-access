@@ -35,7 +35,7 @@ async function remoteApi(path: string, method = 'GET'): Promise<RemoteAccessStat
   return body;
 }
 
-export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'dshpw'>) {
+export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'dshaccess'>) {
   const { t } = props;
   const [status, setStatus] = useState<RemoteAccessStatus | null>(null);
   const [error, setError] = useState('');
@@ -79,46 +79,46 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
 
   return h(
     'div',
-    { className: 'dshpw-remote-panel' },
+    { className: 'dsh-access-remote-panel' },
     h(
       'div',
-      { className: `dshpw-remote-status${status?.gatewayRunning ? ' ready' : ''}` },
-      h('span', { className: 'dshpw-remote-dot' }),
+      { className: `dsh-access-remote-status${status?.gatewayRunning ? ' ready' : ''}` },
+      h('span', { className: 'dsh-access-remote-dot' }),
       h('strong', null, status?.gatewayRunning ? t('remoteReady') : t('remoteUnavailable')),
       h('span', null, t('remoteStatusPort', { port: status?.gatewayPort ?? '—' })),
       h('span', null, t('remoteLoginRequired')),
     ),
     h(
       'section',
-      { className: 'dshpw-remote-card' },
-      h('div', { className: 'dshpw-remote-card-head' },
+      { className: 'dsh-access-remote-card' },
+      h('div', { className: 'dsh-access-remote-card-head' },
         h('div', null, h('h3', null, t('remoteLanTitle')), h('p', null, t('remoteLanHint'))),
-        h('span', { className: `dshpw-remote-badge${isLanAccessAvailable(status) ? ' ready' : ''}` }, isLanAccessAvailable(status) ? t('remoteAvailable') : t('remoteUnavailable')),
+        h('span', { className: `dsh-access-remote-badge${isLanAccessAvailable(status) ? ' ready' : ''}` }, isLanAccessAvailable(status) ? t('remoteAvailable') : t('remoteUnavailable')),
       ),
       isLanAccessAvailable(status) && status?.lanUrl
-        ? h('div', { className: 'dshpw-remote-lan' },
+        ? h('div', { className: 'dsh-access-remote-lan' },
             status.lanQr
-              ? h('img', { className: 'dshpw-remote-qr', src: status.lanQr, alt: t('remoteLanQr') })
-              : h('div', { className: 'dshpw-remote-qr-placeholder', role: 'status' }, t('remoteQrPreparing')),
-            h('div', { className: 'dshpw-remote-copy' },
+              ? h('img', { className: 'dsh-access-remote-qr', src: status.lanQr, alt: t('remoteLanQr') })
+              : h('div', { className: 'dsh-access-remote-qr-placeholder', role: 'status' }, t('remoteQrPreparing')),
+            h('div', { className: 'dsh-access-remote-copy' },
               h('p', null, t('remoteLanLoginHint')),
-              h('div', { className: 'dshpw-remote-url' },
+              h('div', { className: 'dsh-access-remote-url' },
                 h('code', null, status.lanUrl),
-                h('button', { className: 'dshpw-btn ghost', onClick: () => { void copy(status.lanUrl!, 'lan'); } }, t('remoteCopyAddress')),
+                h('button', { className: 'dsh-access-btn ghost', onClick: () => { void copy(status.lanUrl!, 'lan'); } }, t('remoteCopyAddress')),
               ),
-              h('p', { className: 'dshpw-hint' }, t('remoteLanSecurityHint')),
-              copied === 'lan' ? h('div', { className: 'dshpw-ok' }, t('remoteCopied')) : null,
+              h('p', { className: 'dsh-access-hint' }, t('remoteLanSecurityHint')),
+              copied === 'lan' ? h('div', { className: 'dsh-access-ok' }, t('remoteCopied')) : null,
             ),
           )
-        : h('div', { className: 'dshpw-hint dshpw-remote-empty' }, t('remoteNoLan')),
+        : h('div', { className: 'dsh-access-hint dsh-access-remote-empty' }, t('remoteNoLan')),
     ),
     h(
       'section',
-      { className: 'dshpw-remote-card dshpw-remote-public-card' },
-      h('div', { className: 'dshpw-remote-card-head' },
+      { className: 'dsh-access-remote-card dsh-access-remote-public-card' },
+      h('div', { className: 'dsh-access-remote-card-head' },
         h('div', null, h('h3', null, t('remotePublicTitle')), h('p', null, t('remotePublicHint', { port: status?.gatewayPort ?? '—' }))),
         h('button', {
-          className: `dshpw-remote-switch${phase === 'running' ? ' on' : ''}`,
+          className: `dsh-access-remote-switch${phase === 'running' ? ' on' : ''}`,
           role: 'switch',
           'aria-checked': phase === 'running',
           disabled: busy || pending || !status?.gatewayRunning,
@@ -126,7 +126,7 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
           title: phase === 'running' ? t('remoteStopTunnel') : t('remoteStartTunnel'),
         }, h('span')),
       ),
-      h('div', { className: 'dshpw-hint' }, t({
+      h('div', { className: 'dsh-access-hint' }, t({
         idle: 'remotePhase_idle',
         downloading: 'remotePhase_downloading',
         starting: 'remotePhase_starting',
@@ -135,19 +135,19 @@ export function RemoteAccessPanel(props: { refreshKey: number } & PropsLocale<'d
         error: 'remotePhase_error',
       }[phase], { detail: status?.tunnel.detail ?? '' })),
       status?.tunnel.url
-        ? h('div', { className: 'dshpw-remote-public' },
-            status.tunnel.qr ? h('img', { className: 'dshpw-remote-qr small', src: status.tunnel.qr, alt: t('remotePublicQr') }) : null,
-            h('div', { className: 'dshpw-remote-copy' },
-              h('div', { className: 'dshpw-remote-url' },
+        ? h('div', { className: 'dsh-access-remote-public' },
+            status.tunnel.qr ? h('img', { className: 'dsh-access-remote-qr small', src: status.tunnel.qr, alt: t('remotePublicQr') }) : null,
+            h('div', { className: 'dsh-access-remote-copy' },
+              h('div', { className: 'dsh-access-remote-url' },
                 h('code', null, status.tunnel.url),
-                h('button', { className: 'dshpw-btn ghost', onClick: () => { void copy(status.tunnel.url!, 'public'); } }, t('remoteCopyAddress')),
+                h('button', { className: 'dsh-access-btn ghost', onClick: () => { void copy(status.tunnel.url!, 'public'); } }, t('remoteCopyAddress')),
               ),
-              h('p', { className: 'dshpw-hint' }, t('remotePublicSecurityHint')),
-              copied === 'public' ? h('div', { className: 'dshpw-ok' }, t('remoteCopied')) : null,
+              h('p', { className: 'dsh-access-hint' }, t('remotePublicSecurityHint')),
+              copied === 'public' ? h('div', { className: 'dsh-access-ok' }, t('remoteCopied')) : null,
             ),
           )
         : null,
     ),
-    error ? h('div', { className: 'dshpw-error' }, error) : null,
+    error ? h('div', { className: 'dsh-access-error' }, error) : null,
   );
 }

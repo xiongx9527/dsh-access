@@ -136,7 +136,7 @@ function runPatch(argv: string[]): void {
     return;
   }
   if (action === 'off') {
-    // 回滚补丁：从 .bak-dshpw 恢复原始文件（补丁导致设置页异常时用）
+    // 回滚补丁：从 .bak-dsh-access 恢复原始文件（补丁导致设置页异常时用）
     const result = rollbackPatch(root);
     console.log(`  ${tr('cli.result')}: ${result}`);
     if (result === 'rolled-back' && config.patch.restartService) {
