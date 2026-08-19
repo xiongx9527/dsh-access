@@ -24,7 +24,7 @@
       "platform": "web"
     }
   },
-  "license": "BSD-3-Clause",
+  "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=22.5"
   },

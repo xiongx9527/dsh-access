@@ -290,6 +290,8 @@ The UI is bilingual (Chinese/English) and follows dsh's language setting:
 
 ## License
 
-[BSD 3-Clause](./LICENSE) © 2026 slywalker2006 — free to use, modify and distribute; keep the copyright notice.
+This project uses the [dsh-access Non-Commercial Use License](./LICENSE) (Chinese), © 2026 slywalker2006.
+
+Personal learning, research, evaluation, demonstration, and local non-commercial testing are allowed. **Commercial activity is prohibited**, including commercial production deployment, paid services, SaaS, hosting, integration into commercial products, or obtaining revenue or other commercial benefit. Contact the copyright holder for a separate commercial license.
 
 This project is an independent extension for dsh and is not affiliated with DeepSeek. dsh itself is licensed under its own terms (MIT).

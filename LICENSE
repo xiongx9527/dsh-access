@@ -1,30 +1,56 @@
-BSD 3-Clause License
+# dsh-access 非商业使用许可协议（中文）
 
-Copyright (c) 2026, slywalker2006
-All rights reserved.
+版权所有 © 2026 slywalker2006
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+本许可协议适用于 `dsh-access` 项目及其由版权所有者提供的源代码、文档和构建产物（以下统称“本软件”）。下载、复制、安装或使用本软件，即表示你同意本协议。
 
-1. Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
+## 1. 授权范围
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
+在遵守本协议的前提下，版权所有者授予你一项全球性、非排他性、不可转让、不可再许可、免版税的许可，你可以：
 
-3. Neither the name of the copyright holder nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
+- 下载、复制、安装并在本地运行本软件；
+- 为个人学习、研究、评估、演示或非商业测试目的使用本软件；
+- 为上述非商业目的阅读、修改本软件源代码，并在非商业范围内保存修改后的副本。
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
+## 2. 非商业限制
+
+本软件**不得用于任何商业活动**。未经版权所有者事先书面许可，你不得直接或间接：
+
+- 销售、出租、授权、转授权、收费分发或以其他方式商业化本软件或其修改版本；
+- 使用本软件提供付费服务、托管服务、SaaS、代理服务或面向客户的商业服务；
+- 将本软件部署到商业生产环境，或用于获得收入、广告收益、订阅费、佣金、赞助或其他商业利益；
+- 将本软件集成到商业产品、商业项目或商业运营流程中；
+- 移除、隐藏或修改本协议及本软件中的版权和许可声明。
+
+“商业活动”包括任何以获得收入、利润、商业竞争优势或其他商业利益为目的的活动，无论是否已经实际取得收入。
+
+## 3. 非商业再分发
+
+你可以在非商业范围内向他人提供本软件或本软件的修改版本，但必须：
+
+1. 附带本协议的完整副本；
+2. 保留版权声明、许可声明及免责声明；
+3. 明确标注你对源代码所作的修改；
+4. 不得收取软件本身的费用，也不得将再分发与收费服务或商业推广绑定。
+
+## 4. 商业许可
+
+如需将本软件用于商业活动、商业生产环境、付费服务或商业产品，请在使用前联系版权所有者获取单独的商业许可。版权所有者可以自行决定是否授予商业许可及其具体条件。
+
+## 5. 第三方组件
+
+本软件可能包含或依赖第三方软件。第三方软件不受本协议授权，其版权和许可条件以各自随附的许可文件或项目声明为准。本协议不改变任何第三方软件的许可条件。
+
+## 6. 免责声明
+
+本软件按“现状”和“可用状态”提供，不提供任何明示或默示的保证，包括但不限于适销性、特定用途适用性、不侵权、准确性、安全性、可用性或不间断运行的保证。你应自行评估本软件是否适合你的环境，并自行承担使用风险。
+
+在适用法律允许的最大范围内，版权所有者及贡献者不对因使用或无法使用本软件而产生的任何直接、间接、附带、特殊、惩罚性或后果性损害承担责任，包括但不限于数据丢失、业务中断、利润损失或安全事件损失。
+
+## 7. 协议终止
+
+如果你违反本协议，本协议授予你的权利将自动终止。协议终止后，你必须停止使用、复制、分发和部署本软件及其修改版本；本协议中按其性质应继续有效的条款仍然有效。
+
+## 8. 其他
+
+本协议构成你与版权所有者之间关于本软件使用权限的完整协议。任何未在本协议中明确授予的权利均由版权所有者保留。
