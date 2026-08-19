@@ -63,7 +63,7 @@ test('client plugin shadows the native settings seat only for a subuser', async 
   });
 });
 
-test('gateway admin also hides the native settings seat while keeping the account entry', async () => {
+test('gateway admin keeps the native settings seat while keeping the account entry', async () => {
   await withFetch(new Response(JSON.stringify({
     ok: true, me: { id: 1, username: 'admin', role: 'admin' },
   }), { status: 200, headers: { 'content-type': 'application/json' } }), async () => {
@@ -71,7 +71,7 @@ test('gateway admin also hides the native settings seat while keeping the accoun
     apply(context(registered) as never);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.ok(registered.some((entry) => entry.name === 'sidebar.footer.action' && entry.id === 'dsh-access-account'));
-    assert.ok(registered.some((entry) => entry.name === 'sidebar.settings' && entry.priority === -100));
+    assert.equal(registered.some((entry) => entry.name === 'sidebar.settings' && entry.priority === -100), false);
   });
 });
 
@@ -81,6 +81,7 @@ test('account trigger uses the same wide-row and circular rail class pattern as 
   const rail = renderToStaticMarkup(createElement(AccountMenu, { wide: false, t } as never));
   assert.match(wide, /class="dsh-access-account-trigger"/);
   assert.match(rail, /class="dsh-access-account-trigger rail"/);
+  assert.match(wide, /roleAdmin|roleUser/);
 });
 
 

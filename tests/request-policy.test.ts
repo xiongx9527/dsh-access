@@ -47,6 +47,8 @@ test('unknown API mutations fail closed for subusers but static and page reads r
 test('subusers may register a workspace only after the gateway validates its path', async () => {
   const { classifyGatewayRequest } = await policy();
   assert.deepEqual(classifyGatewayRequest('POST', '/api/workspace.create', 'user'), { allowed: true });
+  assert.deepEqual(classifyGatewayRequest('POST', '/api/dsh-access/unknown', 'user'), { allowed: false, reason: 'unknown-mutation' });
+  assert.deepEqual(classifyGatewayRequest('POST', '/aionui-panel/unknown', 'user'), { allowed: false, reason: 'unknown-mutation' });
   assert.deepEqual(classifyGatewayRequest('POST', '/api/workspace.delete', 'user'), { allowed: true });
 });
 

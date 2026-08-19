@@ -204,7 +204,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => installAccessManagementIcon(), 'dsh-access: access navigation icon');
 
   // 只有通过登录网关访问时才注册账号入口；3080 直连没有 /gateway/api/me，保持原生界面。
-  // 3088 网关中的 Admin 与子用户都 shadow DSH 原生设置入口；3080 直连保持原生设置。
+  // 3088 网关中的子用户 shadow DSH 原生设置入口；Admin 保持原生设置可见；3080 直连保持原生设置。
   ctx.effect(() => {
     let active = true;
     const disposers: Array<() => void> = [];
@@ -229,13 +229,15 @@ export function apply(ctx: ClientContext): void {
           ),
         );
         if (typeof account === 'function') disposers.push(account);
-        const settings = ctx.slots.inject('sidebar.settings', () =>
-          ctx.slots.register(
-            { name: 'sidebar.settings', priority: -100 },
-            () => null,
-          ),
-        );
-        if (typeof settings === 'function') disposers.push(settings);
+        if (role === 'user') {
+          const settings = ctx.slots.inject('sidebar.settings', () =>
+            ctx.slots.register(
+              { name: 'sidebar.settings', priority: -100 },
+              () => null,
+            ),
+          );
+          if (typeof settings === 'function') disposers.push(settings);
+        }
       })
       .catch(() => { /* 3080 直连或网关会话失效：不注册账号入口 */ });
     return () => {

@@ -393,6 +393,16 @@ export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshaccess'>)
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    const stream = typeof EventSource === 'undefined' ? null : new EventSource('/gateway/api/messages/stream');
+    const revoke = () => { window.location.assign('/gateway/login'); };
+    stream?.addEventListener('account-revoked', revoke);
+    return () => {
+      stream?.removeEventListener('account-revoked', revoke);
+      stream?.close();
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
     fetch('/gateway/api/me', { headers: { accept: 'application/json' } })
       .then(async (response) => {
@@ -490,7 +500,7 @@ export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshaccess'>)
       h('circle', { cx: 12, cy: 8, r: 3.2, stroke: 'currentColor', strokeWidth: 1.8 }),
       h('path', { d: 'M5.5 20c.6-4 2.8-6 6.5-6s5.9 2 6.5 6', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' }),
     ),
-    wide && h('span', { className: 'dsh-access-account-label' }, me?.username ?? t('accountLoading'))),
+    wide && h('span', { className: 'dsh-access-account-label' }, `${me?.username ?? t('accountLoading')} · ${role}`)),
     open ? createPortal(accountPopover, document.body) : null,
     adminOpen ? h(AdminAccountCenter, { t, close: () => setAdminOpen(false) }) : null,
   );

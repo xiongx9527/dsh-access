@@ -182,7 +182,6 @@ async function boot() {
         process.exit(31);
       }
     }
-    if (!portExplicit) config.gateway.port = 443;
   }
 
   // ── 远程设置补丁：强制启用，网关每次启动自动应用（幂等） ──

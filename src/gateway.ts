@@ -1460,6 +1460,12 @@ export function createGatewayServer(
         return;
       }
       if (row.role !== 'admin') {
+        // Subusers cannot reach the native Settings surface by direct URL, even
+        // when the request is a GET that would otherwise pass the RPC policy.
+        if (parsed.pathname === '/settings' || parsed.pathname.startsWith('/settings/')) {
+          res.redirect(302, '/');
+          return;
+        }
         const perms = effectivePermissions(user.userId);
         const lang = langOf(req);
         const requestDecision = classifyGatewayRequest(req.method, parsed.pathname, 'user');

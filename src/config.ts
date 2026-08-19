@@ -108,7 +108,7 @@ export function loadConfig(): PlatformConfig {
   const autoTls = !userCerts && !autoOff && (autoOn || autoTlsRaw === '');
   const acmeDir = path.join(path.dirname(dbPath), 'acme');
 
-  const gatewayPortRaw = readEnv('MCP_GATEWAY_PORT', '8080').trim();
+  const gatewayPortRaw = readEnv('MCP_GATEWAY_PORT', '3088').trim();
   const gatewayPortNum = Number(gatewayPortRaw);
   // 端口非法（非数字/越界）回退默认 8080，避免 listen(NaN) 的泛化报错
   const gatewayPort =

@@ -757,6 +757,10 @@ export function apply(ctx: Context): void {
                 (value): value is string => typeof value === 'string' && value.trim() !== '',
               )
             : [];
+          if (requestedFolders.length > 1) {
+            writeJson(res, 400, { ok: false, code: 'MULTIPLE_WORKSPACES', error: '只能分配一个工作区域' });
+            return;
+          }
           const desiredRoot = requestedFolders[0] ?? current.workspace_root;
           if (desiredRoot === null) {
             writeJson(res, 400, {
