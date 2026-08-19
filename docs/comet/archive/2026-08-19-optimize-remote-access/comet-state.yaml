@@ -1,0 +1,516 @@
+schema: comet.native.v4
+name: optimize-remote-access
+language: zh-CN
+phase: archive
+status: done
+state_version: 15
+brief: brief.md
+spec_changes:
+  - capability: mobile-access
+    operation: create
+    source: specs/mobile-access/spec.md
+  - capability: remote-access
+    operation: modify
+    source: specs/remote-access/spec.md
+workspace:
+  isolation: current
+  change_branch: comet/optimize-remote-access
+  target_branch: comet/optimize-remote-access
+  finish: null
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 3
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 2
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: A1：Cloudflare 隧道启动参数包含 HTTP/2 传输配置，现有 URL 发现、停止、错误和 WebSocket 转发行为保持可用。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: A2：PATH 已存在 cloudflared
+      时优先复用；缓存命中时不重新下载；支持当前平台发布资产名和缓存二进制名；所有下载源失败时返回不泄露密钥且包含恢复建议的错误。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: A3：用户在远程访问页开启公网访问后，dsh-access 持久化“应保持开启”状态；重启并确认 3088 网关就绪后自动恢复新隧道，旧 URL
+      不被错误复用，二维码和页面状态更新。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: A4：用户手动关闭公网访问后清除恢复状态；后续 dsh-access 重启不再自动启动隧道；自动恢复失败不影响 3088 登录网关启动。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: A5：公网隧道仍然只通过 3088 访问管理登录；自动恢复不会引入匿名公网访问或绕过 Admin/Guest 会话校验。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: A6：支持 gzip/Brotli 协商的大型 JSON/text 响应被压缩，浏览器可自动解压；SSE、WebSocket、HTML
+      注入响应、已经压缩的响应和小响应不被通用压缩。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: A7：带工作区/会话权限过滤的响应先完成过滤和改写，再进行压缩；`Content-Encoding`、`Content-Length`
+      和缓存头保持一致。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: A8：手机宽度访问 3088 时，工作区/会话侧栏默认收起，菜单按钮可以打开左侧抽屉；点击遮罩或切换会话可以关闭，抽屉内容可滚动。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A9
+    source: brief.md
+    text: A9：手机窄屏页面的顶部、底部输入区和浮动控件避开 safe-area；软键盘打开时输入区和发送按钮仍可操作；触控目标满足移动端点击需求。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A10
+    source: brief.md
+    text: A10：桌面宽屏访问 3088 时保持现有侧栏、会话区、设置页和远程访问页布局；移动端改动不影响账号权限和远程访问功能测试。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A11
+    source: brief.md
+    text: A11：自动化测试覆盖隧道 HTTP/2 参数、恢复状态生命周期、下载回退/缓存、压缩协商和移动端导航状态；项目构建成功。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A12
+    source: specs/mobile-access/spec.md
+    text: 当浏览器视口进入移动端断点时，工作区/会话侧栏默认隐藏，主会话区域占据可用宽度。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A13
+    source: specs/mobile-access/spec.md
+    text: 移动端显示菜单按钮；点击后从左侧打开导航抽屉并显示遮罩。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A14
+    source: specs/mobile-access/spec.md
+    text: 点击遮罩、关闭按钮或切换会话后关闭抽屉。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A15
+    source: specs/mobile-access/spec.md
+    text: 抽屉内部独立滚动，不阻止主页面必要的触控滚动。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A16
+    source: specs/mobile-access/spec.md
+    text: 桌面宽屏继续显示现有侧栏，不增加移动端遮罩和浮动菜单。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A17
+    source: specs/mobile-access/spec.md
+    text: 移动端设置 `viewport-fit=cover`，并使用
+      `env(safe-area-inset-top/right/bottom/left)` 保护刘海、状态栏、圆角和 Home 手势区域。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A18
+    source: specs/mobile-access/spec.md
+    text: 顶部导航、底部 composer、浮动聊天入口和抽屉 footer 不得被安全区域遮挡。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A19
+    source: specs/mobile-access/spec.md
+    text: 菜单、关闭、发送和复制等高频控件提供适合触控的点击面积。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A20
+    source: specs/mobile-access/spec.md
+    text: 抽屉遮罩不发生事件穿透；输入框获得焦点、软键盘出现和页面滚动时，composer 仍可见且可操作。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A21
+    source: specs/mobile-access/spec.md
+    text: 移动端样式只在响应式断点生效，不改变桌面宽屏的布局和交互。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A22
+    source: specs/remote-access/spec.md
+    text: Cloudflare quick tunnel 继续指向本机 `127.0.0.1:<gateway-port>`，不指向 3080 或新增
+      3081。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A23
+    source: specs/remote-access/spec.md
+    text: cloudflared 启动时使用 HTTP/2 协议选项，避免依赖 UDP QUIC 的网络环境无法建立数据面连接。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A24
+    source: specs/remote-access/spec.md
+    text: 隧道状态继续区分空闲、下载、启动、运行、停止和错误；错误详情不得包含密钥、Cookie 或内部命令行秘密。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A25
+    source: specs/remote-access/spec.md
+    text: PATH 中已有可执行文件时优先复用，并复制到 dsh-access 自己的受保护缓存目录。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A26
+    source: specs/remote-access/spec.md
+    text: 缓存支持标准可执行文件名和对应平台发布资产名。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A27
+    source: specs/remote-access/spec.md
+    text: 缓存不存在时按平台和架构选择资产，并按配置的下载源顺序尝试；源失败可回退到下一个源。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A28
+    source: specs/remote-access/spec.md
+    text: 下载完成后验证文件存在、可执行和可启动；失败时清理临时文件，保留可重试状态。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A29
+    source: specs/remote-access/spec.md
+    text: 下载过程不读取或返回访问管理账号密码、JWT、SETUP_KEY 或数据库密钥。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A30
+    source: specs/remote-access/spec.md
+    text: 只有用户从远程访问页面明确开启公网访问后，系统才记录自动恢复意图。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A31
+    source: specs/remote-access/spec.md
+    text: dsh-access 启动时先启动并确认 3088 网关，再读取恢复意图并异步启动隧道。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A32
+    source: specs/remote-access/spec.md
+    text: 自动恢复生成新的临时 URL；旧 URL、旧二维码和旧状态不得继续显示为运行中。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A33
+    source: specs/remote-access/spec.md
+    text: 隧道恢复成功后刷新公网 URL、二维码、phase 和 startedAt。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A34
+    source: specs/remote-access/spec.md
+    text: 用户手动关闭公网访问时删除恢复意图，后续重启不再自动拉起。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A35
+    source: specs/remote-access/spec.md
+    text: 自动恢复失败只更新远程访问错误状态，不阻塞账号登录网关；用户可在页面重试。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A36
+    source: specs/remote-access/spec.md
+    text: 自动恢复的隧道和手动启动的隧道使用完全相同的 3088 登录认证和 WebSocket/SSE 保护。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A37
+    source: specs/remote-access/spec.md
+    text: 网关根据请求的 `Accept-Encoding` 选择 Brotli 或 gzip；不支持时原样流式转发。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A38
+    source: specs/remote-access/spec.md
+    text: 只对大型 JSON 或 text 响应使用通用压缩，小响应不压缩。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A39
+    source: specs/remote-access/spec.md
+    text: 已带 `Content-Encoding` 的响应、SSE、WebSocket、图片/音频/视频等二进制响应不走通用压缩。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A40
+    source: specs/remote-access/spec.md
+    text: HTML 注入流程保持独立：先按既有流程解压、注入和重新编码，不重复经过通用压缩。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A41
+    source: specs/remote-access/spec.md
+    text: workspace、session、目录和其他受权限影响的响应先完成解析、过滤、改写，再按客户端协商结果压缩。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A42
+    source: specs/remote-access/spec.md
+    text: 改写响应时必须删除旧的 `Content-Length` 和 `Content-Encoding`，重新设置与实际响应体一致的头。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+  - id: A43
+    source: specs/remote-access/spec.md
+    text: 压缩失败时不得返回半截响应；应关闭响应或回退为安全的未压缩完整响应。
+    result: passed
+    reason:
+      text: 第三轮独立 Verifier 验收通过。
+      truncated: false
+builder_handoff:
+  candidate_id: 892d5fc7-d5ad-408a-bff7-1e197adf9768
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:663071c1-8e73-45ee-bf13-e3506b410d7e
+  iteration: 3
+  summary:
+    text: 第三轮仅修复上一轮剩余的 cloudflared 错误脱敏：下载失败不再拼接原始 fetch 异常，只返回官方源/配置镜像序号和通用 network
+      request failed；下载成功仍执行可执行文件检查与 --version 探针。新增/保留错误脱敏测试。
+    truncated: false
+  addressed_acceptance_ids:
+    - A2
+    - A24
+    - A1
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+    - A9
+    - A10
+    - A11
+    - A12
+    - A13
+    - A14
+    - A15
+    - A16
+    - A17
+    - A18
+    - A19
+    - A20
+    - A21
+    - A22
+    - A23
+    - A25
+    - A26
+    - A27
+    - A28
+    - A29
+    - A30
+    - A31
+    - A32
+    - A33
+    - A34
+    - A35
+    - A36
+    - A37
+    - A38
+    - A39
+    - A40
+    - A41
+    - A42
+    - A43
+  checks:
+    - name:
+        text: npm test
+        truncated: false
+      result: passed
+      note:
+        text: 114 tests passed, 0 failed, 0 skipped
+        truncated: false
+    - name:
+        text: npm run build
+        truncated: false
+      result: passed
+      note:
+        text: TypeScript build and client bundle completed
+        truncated: false
+    - name:
+        text: git diff --check
+        truncated: false
+      result: passed
+      note:
+        text: No whitespace errors
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 未在真实 Cloudflare 网络环境执行端到端隧道连接和实际镜像下载。
+      truncated: false
+    - text: 未在实体 Android/iOS 手机上验证刘海、Home 手势区和软键盘；通过响应式 CSS/DOM 检查覆盖。
+      truncated: false
+    - text: 没有直接复制 dsh-pocket GPL-2.0 源码。
+      truncated: false
+  known_limits_truncated: false
+  submitted_at: 2026-08-19T07:48:45.531Z
+blockers: []
+verification:
+  candidate_id: 892d5fc7-d5ad-408a-bff7-1e197adf9768
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:d7c28ccc-6d4f-4197-9174-7c7bdd8ef44b
+  iteration: 3
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks: []
+  summary:
+    text: 第三轮候选验收通过；A1-A43 全部通过。fresh npm test 114/114，npm run build 通过，git diff
+      --check 通过；A2/A24 的 cloudflared 错误脱敏已确认不会泄露原始 fetch 异常、镜像 URL、查询参数或 token。
+    truncated: false
+  risks:
+    - text: 未在真实 Cloudflare 网络环境执行端到端隧道连接和真实镜像下载。
+      truncated: false
+    - text: 未在实体 Android/iOS 设备验证刘海、Home 手势区和软键盘；当前通过 CSS/DOM 定向测试覆盖。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-08-19T08:11:11.629Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: execution-error
+    unresolved_ids: []
+    summary:
+      text: "Native Verifier response was invalid: Native Verifier risks must be text
+        entries"
+      truncated: false
+    completed_at: 2026-08-19T06:35:40.623Z
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 2
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A8
+      - A9
+      - A11
+      - A15
+      - A18
+      - A19
+      - A20
+      - A24
+      - A25
+      - A28
+      - A29
+    summary:
+      text: Verifier 判定 fail；远程认证、自动恢复和压缩主流程通过，但构建、cloudflared
+        优先级/脱敏/可执行验证及移动端抽屉滚动和浮动控件适配需要回到 Build 修复。
+      truncated: false
+    completed_at: 2026-08-19T06:58:20.607Z
+  - goal_cycle: 1
+    iteration: 2
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A24
+    summary:
+      text: 第二轮候选大部分上一轮问题已修复：fresh npm test 114/114、隔离副本 npm run build 退出 0、git diff
+        --check clean；PATH 优先、--version 探针、移动侧栏滚动、聊天 safe-area/44px、q=0 与 Brotli
+        处理均已看到实现和定向测试。仍发现下载失败路径把原始异常消息拼入错误详情；用 URL/查询参数形式的异常复现了镜像 token 泄露，因此
+        A2/A24 失败，整体 verdict=fail。
+      truncated: false
+    completed_at: 2026-08-19T07:35:32.445Z
+  - goal_cycle: 1
+    iteration: 3
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 第三轮候选验收通过；A1-A43 全部通过。fresh npm test 114/114，npm run build 通过，git diff
+        --check 通过；A2/A24 的 cloudflared 错误脱敏已确认不会泄露原始 fetch 异常、镜像 URL、查询参数或
+        token。
+      truncated: false
+    completed_at: 2026-08-19T08:11:11.629Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-08-19T04:20:59.503Z

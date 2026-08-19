@@ -13,17 +13,41 @@ export function MobileNavigation(props: PropsLocale<'dshpw'>) {
 
   useEffect(() => {
     const query = window.matchMedia(MOBILE_QUERY);
+    const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    const originalViewport = viewport?.content ?? '';
+    const themeColor = document.createElement('meta');
+    themeColor.name = 'theme-color';
     const update = () => {
       setMobile(query.matches);
+      if (query.matches) {
+        if (viewport) viewport.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+        themeColor.content = getComputedStyle(document.body).backgroundColor;
+        if (!themeColor.parentElement) document.head.appendChild(themeColor);
+      } else {
+        if (viewport) viewport.content = originalViewport;
+        themeColor.remove();
+      }
       if (!query.matches) {
+        setMobileNavigationOpen(false);
+        setOpenState(false);
+      }
+    };
+    const closeAfterSidebarSelection = (event: Event) => {
+      if (!query.matches) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('[class*="_sidebar"]')) {
         setMobileNavigationOpen(false);
         setOpenState(false);
       }
     };
     update();
     query.addEventListener?.('change', update);
+    document.addEventListener('click', closeAfterSidebarSelection, true);
     return () => {
       query.removeEventListener?.('change', update);
+      document.removeEventListener('click', closeAfterSidebarSelection, true);
+      if (viewport) viewport.content = originalViewport;
+      themeColor.remove();
       setMobileNavigationOpen(false);
     };
   }, []);

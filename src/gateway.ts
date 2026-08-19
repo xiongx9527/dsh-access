@@ -461,6 +461,89 @@ function renderSetupPage(params: { lang: Lang; error?: string; csrf: string }): 
   });
 }
 
+type ResponseCompression = 'br' | 'gzip';
+
+export function requestedCompression(req: Pick<IncomingMessage, 'headers'>): ResponseCompression | null {
+  const accepted = new Map<string, number>();
+  for (const raw of String(req.headers['accept-encoding'] ?? '').toLowerCase().split(',')) {
+    const [name, ...parameters] = raw.trim().split(';');
+    if (!name) continue;
+    const quality = parameters.find((parameter) => parameter.trim().startsWith('q='));
+    const value = quality ? Number(quality.trim().slice(2)) : 1;
+    accepted.set(name, Number.isFinite(value) ? value : 0);
+  }
+  if ((accepted.get('br') ?? 0) > 0) return 'br';
+  if ((accepted.get('gzip') ?? 0) > 0) return 'gzip';
+  return null;
+}
+
+function decodeResponseBody(body: Buffer, encoding: string): Buffer {
+  const normalized = encoding.toLowerCase();
+  if (normalized.includes('gzip')) return zlib.gunzipSync(body);
+  if (normalized.includes('br')) return zlib.brotliDecompressSync(body);
+  if (normalized.includes('deflate')) return zlib.inflateSync(body);
+  return body;
+}
+
+function isCompressibleText(contentType: string): boolean {
+  const normalized = contentType.toLowerCase();
+  return normalized.includes('application/json') || normalized.startsWith('text/');
+}
+
+function addVary(headers: Record<string, string | string[] | undefined>, value: string): void {
+  const existing = headers.vary;
+  const values = Array.isArray(existing) ? existing.join(',') : String(existing ?? '');
+  if (!values.split(',').some((item) => item.trim().toLowerCase() === value.toLowerCase())) {
+    headers.vary = values === '' ? value : `${values}, ${value}`;
+  }
+}
+
+/** Compress a complete response after all gateway filtering and rewriting. */
+export function compressResponseBody(
+  req: Pick<IncomingMessage, 'headers'>,
+  headers: Record<string, string | string[] | undefined>,
+  body: Buffer,
+): { headers: Record<string, string | string[] | undefined>; body: Buffer } {
+  const outputHeaders = { ...headers };
+  const contentType = String(outputHeaders['content-type'] ?? '');
+  const existingEncoding = String(outputHeaders['content-encoding'] ?? '');
+  const encoding = requestedCompression(req);
+  if (encoding && existingEncoding === '' && isCompressibleText(contentType)) addVary(outputHeaders, 'Accept-Encoding');
+  if (
+    body.length < 1024 ||
+    !encoding ||
+    existingEncoding !== '' ||
+    !isCompressibleText(contentType) ||
+    contentType.toLowerCase().includes('text/event-stream')
+  ) {
+    outputHeaders['content-length'] = String(body.length);
+    return { headers: outputHeaders, body };
+  }
+  try {
+    const compressed = encoding === 'br' ? zlib.brotliCompressSync(body) : zlib.gzipSync(body);
+    if (compressed.length >= body.length) {
+      outputHeaders['content-length'] = String(body.length);
+      return { headers: outputHeaders, body };
+    }
+    delete outputHeaders['content-length'];
+    outputHeaders['content-encoding'] = encoding;
+    outputHeaders['content-length'] = String(compressed.length);
+    addVary(outputHeaders, 'Accept-Encoding');
+    return { headers: outputHeaders, body: compressed };
+  } catch {
+    outputHeaders['content-length'] = String(body.length);
+    return { headers: outputHeaders, body };
+  }
+}
+
+export function shouldBufferForCompression(req: Pick<IncomingMessage, 'headers'>, headers: Record<string, string | string[] | undefined>): boolean {
+  if (!requestedCompression(req) || String(headers['content-encoding'] ?? '') !== '') return false;
+  const contentType = String(headers['content-type'] ?? '');
+  if (!isCompressibleText(contentType) || contentType.toLowerCase().includes('text/event-stream')) return false;
+  const contentLength = Number(headers['content-length'] ?? 0);
+  return !Number.isFinite(contentLength) || contentLength === 0 || contentLength >= 1024;
+}
+
 export function createGatewayServer(
   config: PlatformConfig,
   auth: AuthService,
@@ -1485,8 +1568,8 @@ export function createGatewayServer(
           upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
           upstreamRes.on('end', () => {
             try {
-              let body = Buffer.concat(chunks);
-              if (encoding.includes('gzip')) body = zlib.gunzipSync(body);
+              let body: Buffer<ArrayBufferLike> = Buffer.concat(chunks);
+              body = decodeResponseBody(body, encoding);
               const html = body.toString('utf8');
               const injected = html.replace(/<head[^>]*>/i, (match) => match + INJECT_SCRIPT);
               let out = Buffer.from(injected, 'utf8');
@@ -1524,18 +1607,18 @@ export function createGatewayServer(
           upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
           upstreamRes.on('end', () => {
             try {
-              let body = Buffer.concat(chunks);
+              let body: Buffer<ArrayBufferLike> = Buffer.concat(chunks);
               const enc = String(upstreamRes.headers['content-encoding'] ?? '');
-              if (enc.includes('gzip')) body = zlib.gunzipSync(body);
+              body = decodeResponseBody(body, enc);
               const parsed = JSON.parse(body.toString('utf8'));
               const restricted = restrictDirectoryListing(parsed, reqAs.dshpwPerms!);
               const out = Buffer.from(JSON.stringify(restricted), 'utf8');
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               delete respHeaders['content-length'];
               delete respHeaders['content-encoding'];
-              respHeaders['content-length'] = String(out.length);
-              res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
-              res.end(out);
+              const encoded = compressResponseBody(req, respHeaders, out);
+              res.writeHead(upstreamRes.statusCode ?? 200, encoded.headers);
+              res.end(encoded.body);
             } catch {
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
@@ -1552,9 +1635,9 @@ export function createGatewayServer(
           upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
           upstreamRes.on('end', () => {
             try {
-              let body = Buffer.concat(chunks);
+              let body: Buffer<ArrayBufferLike> = Buffer.concat(chunks);
               const enc = String(upstreamRes.headers['content-encoding'] ?? '');
-              if (enc.includes('gzip')) body = zlib.gunzipSync(body);
+              body = decodeResponseBody(body, enc);
               const parsed = JSON.parse(body.toString('utf8'));
               // 先缓存全量 workspaceId→path/session count，供 create/delete/session.create 授权。
               workspacePathById.clear();
@@ -1570,9 +1653,9 @@ export function createGatewayServer(
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               delete respHeaders['content-length'];
               delete respHeaders['content-encoding'];
-              respHeaders['content-length'] = String(out.length);
-              res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
-              res.end(out);
+              const encoded = compressResponseBody(req, respHeaders, out);
+              res.writeHead(upstreamRes.statusCode ?? 200, encoded.headers);
+              res.end(encoded.body);
             } catch {
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
@@ -1593,9 +1676,9 @@ export function createGatewayServer(
           upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
           upstreamRes.on('end', () => {
             try {
-              let body = Buffer.concat(chunks);
+              let body: Buffer<ArrayBufferLike> = Buffer.concat(chunks);
               const enc = String(upstreamRes.headers['content-encoding'] ?? '');
-              if (enc.includes('gzip')) body = zlib.gunzipSync(body);
+              body = decodeResponseBody(body, enc);
               const parsed = JSON.parse(body.toString('utf8'));
               sessionPathById.clear();
               collectSessionPathPairs(parsed, sessionPathById);
@@ -1604,9 +1687,9 @@ export function createGatewayServer(
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               delete respHeaders['content-length'];
               delete respHeaders['content-encoding'];
-              respHeaders['content-length'] = String(out.length);
-              res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
-              res.end(out);
+              const encoded = compressResponseBody(req, respHeaders, out);
+              res.writeHead(upstreamRes.statusCode ?? 200, encoded.headers);
+              res.end(encoded.body);
             } catch {
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
@@ -1627,6 +1710,17 @@ export function createGatewayServer(
           (parsedUrl.pathname.startsWith('/plugins/') && parsedUrl.searchParams.has('rev'));
         if (isHashedStatic) {
           respHeaders['cache-control'] = 'public, max-age=31536000, immutable';
+        }
+        if (shouldBufferForCompression(req, respHeaders)) {
+          const chunks: Buffer[] = [];
+          upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          upstreamRes.on('end', () => {
+            const encoded = compressResponseBody(req, respHeaders, Buffer.concat(chunks));
+            res.writeHead(upstreamRes.statusCode ?? 502, encoded.headers);
+            res.end(encoded.body);
+          });
+          upstreamRes.on('error', () => res.destroy());
+          return;
         }
         res.writeHead(upstreamRes.statusCode ?? 502, respHeaders);
         upstreamRes.pipe(res);

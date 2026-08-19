@@ -129,14 +129,17 @@ const CSS = `
 @media(max-width:640px){.dshpw-admin-grid{grid-template-columns:1fr}.dshpw-directory-picker{inset:16px}.dshpw-admin-overlay{padding:10px}.dshpw-remote-lan,.dshpw-remote-public{grid-template-columns:1fr}.dshpw-remote-qr,.dshpw-remote-qr-placeholder{margin:0 auto}.dshpw-remote-url{align-items:stretch;flex-direction:column}.dshpw-remote-card-head{align-items:flex-start}.dshpw-tabs{gap:16px}}
 @media(max-width:640px){
   html,body,#root{max-width:100%;overflow-x:hidden}
+  html,body{overscroll-behavior-x:none;touch-action:manipulation}
   [class*="_sidebar"]{position:fixed!important;z-index:2050!important;top:0!important;bottom:0!important;left:0!important;max-width:min(86vw,320px)!important;transform:translateX(-105%);transition:transform .2s ease;background:var(--dsw-alias-bg-layer-1)!important;box-shadow:0 18px 48px rgba(0,0,0,.28)}
   html[data-dshpw-mobile-nav-open] [class*="_sidebar"]{transform:translateX(0)}
   [class*="_main"],[class*="_content"],[class*="_conversation"]{min-width:0!important;max-width:100%!important}
+  [class*="_header"],[class*="_main"],[class*="_content"],[class*="_conversation"],[class*="_settings"]{padding-top:max(8px,env(safe-area-inset-top))!important}
   [class*="_main"],[class*="_content"],[class*="_conversation"],[class*="_settings"]{padding-left:max(12px,env(safe-area-inset-left))!important;padding-right:max(12px,env(safe-area-inset-right))!important;padding-bottom:max(12px,env(safe-area-inset-bottom))!important}
   [class*="_composer"]{max-width:100%!important;padding-bottom:max(8px,env(safe-area-inset-bottom))!important}
-  button,input,select,textarea{min-height:44px}
+  [class*="_sidebar"]{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  button,input,select,textarea{min-height:44px;touch-action:manipulation}
   .dshpw-mobile-toggle{position:fixed;z-index:2070;left:max(12px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));width:44px;height:44px;border:1px solid var(--dsw-alias-border-l2);border-radius:50%;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:0 8px 24px rgba(0,0,0,.2);font-size:20px;cursor:pointer}
-  .dshpw-mobile-backdrop{position:fixed;z-index:2040;inset:0;border:0;background:rgba(0,0,0,.38)}
+  .dshpw-mobile-backdrop{position:fixed;z-index:2040;inset:0;border:0;background:rgba(0,0,0,.38);touch-action:none}
 }
 
 `;

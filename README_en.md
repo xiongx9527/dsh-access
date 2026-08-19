@@ -203,6 +203,10 @@ The expanded card has two tabs: **Accounts & permissions** and **Remote access**
 
 - LAN URLs use `http://<computer-LAN-IP>:<gateway-port>` and always open the Access management sign-in flow first.
 - A Cloudflare quick tunnel targets the same Access management gateway and still requires an account login.
+- If public access was explicitly enabled, the tunnel is restored after an Access management restart; turning it off manually disables auto-restore.
+- The quick tunnel uses HTTP/2 for networks where UDP 7844 is unavailable.
+- Eligible large JSON/text responses negotiate Brotli or gzip; WebSocket, SSE, already-compressed responses and HTML injection keep their existing handling.
+- Narrow browser viewports use drawer navigation, safe-area spacing and touch-friendly controls; desktop layouts stay unchanged.
 - Port 3080 remains the loopback-only upstream; this plugin does not listen on Pocket's port 3081.
 - If `dsh-pocket` is already installed, disable or remove it to avoid duplicate entry points and port conflicts. This plugin never uninstalls another plugin automatically.
 - Plain HTTP is suitable only for a trusted LAN; prefer HTTPS for public access.
@@ -225,6 +229,7 @@ The expanded card has two tabs: **Accounts & permissions** and **Remote access**
 | `MCP_GATEWAY_ACME_STAGING` | off | `1` = issue from the LE staging environment (for testing; browsers won't trust it) |
 | `MCP_GATEWAY_TLS_CERT` / `MCP_GATEWAY_TLS_KEY` | empty | When both are set, your own certificate is used (takes priority over auto HTTPS) |
 | `MCP_GATEWAY_PUBLIC_HOST` | empty | Public IP/domain used for redirects (prevents Host-header reflection) |
+| `DSH_ACCESS_CLOUDFLARED_MIRRORS` | empty | Optional comma-separated HTTPS mirrors for cloudflared downloads; the official GitHub source is always tried first |
 | `MCP_DSH_ROOT` | auto-detected | dsh install directory (where `@deepseek-ai/dsh` lives); set manually if detection fails |
 | `MCP_DSH_RESTART_SERVICE` | `dsh-web` | systemd service to restart after a patch reload; an explicit empty value disables auto-restart |
 | `DSH_ACCESS_ENV_FILE` | empty | Explicit path to `.env` (the plugin passes it automatically — usually not needed) |

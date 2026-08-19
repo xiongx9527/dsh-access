@@ -322,6 +322,14 @@ const CHAT_CSS = `
 @keyframes dshpwMsgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes dshpwMsgMineIn{from{opacity:0;transform:translateY(8px) translateX(8px)}to{opacity:1;transform:none}}
 @keyframes dshpwShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+@media(max-width:640px){
+  .dshpw-chat-fab{left:max(14px,env(safe-area-inset-left));bottom:calc(116px + env(safe-area-inset-bottom));width:44px;height:44px}
+  .dshpw-chat-panel{width:calc(100vw - 20px);height:min(680px,calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)))}
+  .dshpw-chat-header{padding-top:max(10px,env(safe-area-inset-top));padding-right:max(12px,env(safe-area-inset-right));padding-left:max(12px,env(safe-area-inset-left))}
+  .dshpw-chat-close{width:44px;height:44px}
+  .dshpw-chat-composer{padding-bottom:max(10px,env(safe-area-inset-bottom));padding-right:max(12px,env(safe-area-inset-right));padding-left:max(12px,env(safe-area-inset-left))}
+  .dshpw-chat-tagbtn,.dshpw-chat-send{min-height:44px}
+}
 `;
 
 if (typeof document !== 'undefined') {

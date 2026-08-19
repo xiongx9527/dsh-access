@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 
 export type TunnelPhase = 'idle' | 'downloading' | 'starting' | 'running' | 'stopping' | 'error';
@@ -34,18 +34,53 @@ function executableOnPath(): string | null {
     if (!directory) continue;
     for (const name of names) {
       const candidate = join(directory, name);
-      if (existsSync(candidate)) return candidate;
+      if (isUsableFile(candidate)) return candidate;
     }
   }
   return null;
 }
 
-function releaseAsset(): { name: string; archive: boolean } {
+export function releaseAsset(): { name: string; archive: boolean } {
   const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
   if (process.platform === 'darwin') return { name: `cloudflared-darwin-${arch}.tgz`, archive: true };
   if (process.platform === 'linux') return { name: `cloudflared-linux-${arch}`, archive: false };
   if (process.platform === 'win32' && arch === 'amd64') return { name: 'cloudflared-windows-amd64.exe', archive: false };
   throw new Error(`unsupported cloudflared platform: ${process.platform}/${process.arch}`);
+}
+
+/**
+ * Download sources are intentionally configurable.  The official Cloudflare
+ * release remains the default; deployments with restricted GitHub access can
+ * provide comma-separated HTTPS mirrors through DSH_ACCESS_CLOUDFLARED_MIRRORS.
+ */
+export function cloudflaredDownloadUrls(assetName: string): string[] {
+  const official = `https://github.com/cloudflare/cloudflared/releases/latest/download/${assetName}`;
+  const configured = (process.env.DSH_ACCESS_CLOUDFLARED_MIRRORS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value !== '')
+    .map((base) => `${base.replace(/\/$/, '')}/${assetName}`)
+    .filter((url) => /^https:\/\//i.test(url));
+  return [...new Set([official, ...configured])];
+}
+
+function isUsableFile(file: string): boolean {
+  try {
+    return statSync(file).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isExecutableFile(file: string): boolean {
+  if (!isUsableFile(file)) return false;
+  if (process.platform === 'win32') return true;
+  try {
+    accessSync(file, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function waitForProcess(child: ChildProcess): Promise<void> {
@@ -61,12 +96,35 @@ async function extractTarGz(archive: string, destination: string): Promise<void>
   if (child.exitCode !== 0) throw new Error(`cloudflared extract failed: ${Buffer.concat(stderr).toString('utf8').trim()}`);
 }
 
+async function verifyDownloadedExecutable(file: string): Promise<void> {
+  if (!isExecutableFile(file)) throw new Error('cloudflared download did not produce an executable file');
+  const child = spawn(file, ['--version'], { stdio: 'ignore' });
+  const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL'); } catch { /* already exited */ }
+      reject(new Error('cloudflared executable probe timed out'));
+    }, 5000);
+    timer.unref();
+    child.once('error', reject);
+    child.once('exit', (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal });
+    });
+  });
+  if (result.code !== 0 || result.signal !== null) {
+    throw new Error('cloudflared executable probe failed');
+  }
+}
+
 export async function ensureCloudflared(home: string): Promise<string> {
   const directory = join(home, 'remote-access', 'bin');
   const executable = join(directory, executableName());
-  if (existsSync(executable)) return executable;
+  const asset = releaseAsset();
+  const assetName = asset.name.replace(/\.tgz$/i, '').replace(/\.exe$/i, '');
   mkdirSync(directory, { recursive: true, mode: 0o700 });
 
+  // PATH is the operator's explicit installation and takes precedence over a
+  // stale cached binary from an older dsh-access run.
   const fromPath = executableOnPath();
   if (fromPath) {
     copyFileSync(fromPath, executable);
@@ -74,12 +132,42 @@ export async function ensureCloudflared(home: string): Promise<string> {
     return executable;
   }
 
-  const asset = releaseAsset();
-  const response = await fetch(`https://github.com/cloudflare/cloudflared/releases/latest/download/${asset.name}`, {
-    redirect: 'follow',
-  });
-  if (!response.ok) throw new Error(`cloudflared download failed: HTTP ${String(response.status)}`);
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const cachedCandidates = [
+    executable,
+    join(directory, asset.name),
+    join(directory, assetName),
+  ];
+  for (const candidate of cachedCandidates) {
+    if (isExecutableFile(candidate) && !candidate.endsWith('.tgz')) {
+      if (candidate !== executable) {
+        copyFileSync(candidate, executable);
+        if (process.platform !== 'win32') chmodSync(executable, 0o700);
+      }
+      return executable;
+    }
+  }
+
+  let bytes: Buffer | null = null;
+  const failures: string[] = [];
+  for (const [index, url] of cloudflaredDownloadUrls(asset.name).entries()) {
+    const sourceLabel = index === 0 ? 'official release' : `configured mirror ${index}`;
+    try {
+      const response = await fetch(url, { redirect: 'follow' });
+      if (!response.ok) {
+        failures.push(`${sourceLabel}: HTTP ${String(response.status)}`);
+        continue;
+      }
+      bytes = Buffer.from(await response.arrayBuffer());
+      break;
+    } catch (error) {
+      // Do not echo arbitrary fetch errors: a configured mirror may contain
+      // query-string credentials or other deployment-only material.
+      failures.push(`${sourceLabel}: network request failed`);
+    }
+  }
+  if (bytes === null) {
+    throw new Error(`cloudflared download failed; try another mirror or install cloudflared on PATH (${failures.join('; ')})`);
+  }
 
   if (asset.archive) {
     const archive = join(directory, asset.name);
@@ -92,8 +180,17 @@ export async function ensureCloudflared(home: string): Promise<string> {
   } else {
     writeFileSync(executable, bytes, { mode: 0o700 });
   }
-  if (!existsSync(executable)) throw new Error('cloudflared executable missing after download');
+  if (!isExecutableFile(executable)) {
+    rmSync(executable, { force: true });
+    throw new Error('cloudflared download did not produce an executable file');
+  }
   if (process.platform !== 'win32') chmodSync(executable, 0o700);
+  try {
+    await verifyDownloadedExecutable(executable);
+  } catch (error) {
+    rmSync(executable, { force: true });
+    throw error;
+  }
   return executable;
 }
 
@@ -140,7 +237,7 @@ export class CloudflaredTunnel implements TunnelController {
       if (generation !== this.generation) throw new Error('cloudflared start cancelled');
       this.state = { phase: 'starting', detail: '', url: null, startedAt: null };
       this.expectedStop = false;
-      const child = this.spawnProcess(executable, ['tunnel', '--url', targetUrl, '--no-autoupdate'], {
+      const child = this.spawnProcess(executable, ['tunnel', '--url', targetUrl, '--protocol', 'http2', '--no-autoupdate'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       this.child = child;
