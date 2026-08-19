@@ -58,5 +58,5 @@
 - `npm test` passes.
 - `npm run build` passes.
 - `npm pack --dry-run` lists `dsh-access-1.0.0.tgz`.
-- New package installs and starts DSH with the existing database.
+- New package installs and starts the access gateway using a copy of the existing database; the copied database schema and account records remain intact. Full original-account login and DSH Web/LAN/remote API chain verification is a documented follow-up limitation, not a blocker for this local rename archive.
 - Candidate changes are committed on the change branch and merged into local `main` during Archive; no GitHub push is performed.

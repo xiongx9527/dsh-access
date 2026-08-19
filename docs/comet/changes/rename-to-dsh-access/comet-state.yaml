@@ -1,9 +1,9 @@
 schema: comet.native.v4
 name: rename-to-dsh-access
 language: zh-CN
-phase: shape
+phase: archive
 status: active
-state_version: 11
+state_version: 42
 brief: brief.md
 spec_changes:
   - capability: rename
@@ -13,22 +13,572 @@ workspace:
   isolation: worktree
   change_branch: comet/rename-to-dsh-access
   target_branch: main
-  finish: null
+  finish: merge
 loop:
-  stage: shape
-  goal_cycle: 2
-  iteration: 0
-  attempt: 0
+  stage: archive-ready
+  goal_cycle: 4
+  iteration: 2
+  attempt: 1
   retry_epoch: 0
   failed_iteration_count: 0
   no_progress_count: 0
   execution_failure_count: 0
   previous_unresolved_ids: []
-  next_action: confirm-shape
-acceptance: []
-builder_handoff: null
+  next_action: archive
+acceptance:
+  - id: A1
+    source: brief.md
+    text: A1：`package.json` 的 `name`、`version`、`bin`、exports、repository、homepage 和
+      bugs 全部指向 `dsh-access` / `1.0.0` / 新仓库。
+    result: passed
+    reason:
+      text: Package metadata correct.
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: A2：源代码、客户端 bundle、测试、安装脚本和活跃文档中不再出现旧技术标识；历史 Git 提交不要求改写。
+    result: passed
+    reason:
+      text: Active shipped scope has no legacy identifiers.
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: A3：`/api/dsh-access/*` 路由可用，旧 API 路径不存在且不会被客户端引用。
+    result: passed
+    reason:
+      text: New routes present; old aliases absent.
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: A4：插件导出名、settings section id、客户端注册 id、运行时环境变量和日志标识统一以 `dsh-access` 命名。
+    result: passed
+    reason:
+      text: Technical identifiers use dsh-access.
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: A5：设置侧栏仍显示“访问管理”，页面两个 Tab 仍显示“账号权限”和“远程访问”；页面不出现旧包名。
+    result: passed
+    reason:
+      text: Existing UI/tabs unchanged.
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: A6：登录页、未配置错误、HTTP 警告和文档中的用户可见品牌显示“访问管理” / “Access management”。
+    result: passed
+    reason:
+      text: User-facing branding correct.
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: A7：新包 `dsh-access@1.0.0` 可构建、可打包、可安装；`npm test` 和 `npm run build` 通过。
+    result: passed
+    reason:
+      text: Tests/build/pack/install passed.
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: A8：新包可安装并启动访问管理网关，使用既有数据库副本启动时数据库结构和账户数据保持不变；原账号登录及完整 DSH Web/LAN/远程 API
+      链路作为后续验证。
+    result: passed
+    reason:
+      text: Existing database copy gateway smoke passed; schema/account snapshot
+        unchanged; original-account full chain is documented follow-up.
+      truncated: false
+  - id: A9
+    source: brief.md
+    text: A9：本地候选源代码、测试和包内容保持干净；候选已提交到 change 分支，并可在归档时合并到本地 `main`。
+    result: passed
+    reason:
+      text: Candidate content is clean and committed; local merge is Archive action.
+      truncated: false
+  - id: A10
+    source: brief.md
+    text: A10：旧 fork `xiongx9527/dsh-passwords-ext` 不被本 change 修改或删除，用户可后续手动处理。
+    result: passed
+    reason:
+      text: Old fork untouched.
+      truncated: false
+  - id: A11
+    source: specs/rename/spec.md
+    text: "| 位置 | 目标值 |"
+    result: passed
+    reason:
+      text: Canonical identifiers spec present.
+      truncated: false
+  - id: A12
+    source: specs/rename/spec.md
+    text: "| npm package | `dsh-access` |"
+    result: passed
+    reason:
+      text: Package dsh-access.
+      truncated: false
+  - id: A13
+    source: specs/rename/spec.md
+    text: "| version | `1.0.0` |"
+    result: passed
+    reason:
+      text: Version 1.0.0.
+      truncated: false
+  - id: A14
+    source: specs/rename/spec.md
+    text: "| CLI | `dsh-access` |"
+    result: passed
+    reason:
+      text: CLI dsh-access.
+      truncated: false
+  - id: A15
+    source: specs/rename/spec.md
+    text: "| plugin name | `dsh-access` |"
+    result: passed
+    reason:
+      text: Plugin dsh-access.
+      truncated: false
+  - id: A16
+    source: specs/rename/spec.md
+    text: "| settings section id | `dsh-access` |"
+    result: passed
+    reason:
+      text: Settings id dsh-access.
+      truncated: false
+  - id: A17
+    source: specs/rename/spec.md
+    text: "| UI label | `访问管理` / `Access management` |"
+    result: passed
+    reason:
+      text: UI label correct.
+      truncated: false
+  - id: A18
+    source: specs/rename/spec.md
+    text: "| API prefix | `/api/dsh-access/` |"
+    result: passed
+    reason:
+      text: API prefix correct.
+      truncated: false
+  - id: A19
+    source: specs/rename/spec.md
+    text: "| env file variable | `DSH_ACCESS_ENV_FILE` |"
+    result: passed
+    reason:
+      text: DSH_ACCESS_ENV_FILE correct.
+      truncated: false
+  - id: A20
+    source: specs/rename/spec.md
+    text: "| GitHub repository | `xiongx9527/dsh-access` |"
+    result: passed
+    reason:
+      text: Repository metadata correct.
+      truncated: false
+  - id: A21
+    source: specs/rename/spec.md
+    text: "`package.json.name` is `dsh-access` and `version` is `1.0.0`."
+    result: passed
+    reason:
+      text: Package name/version correct.
+      truncated: false
+  - id: A22
+    source: specs/rename/spec.md
+    text: "`bin`, `main`, `types`, exports, package files and package scripts use
+      the new package identity."
+    result: passed
+    reason:
+      text: Package entrypoints correct.
+      truncated: false
+  - id: A23
+    source: specs/rename/spec.md
+    text: repository/homepage/bugs point to
+      `https://github.com/xiongx9527/dsh-access`.
+    result: passed
+    reason:
+      text: Repository URLs correct.
+      truncated: false
+  - id: A24
+    source: specs/rename/spec.md
+    text: "`src/plugin.ts` exports `name = 'dsh-access'`."
+    result: passed
+    reason:
+      text: Plugin export correct.
+      truncated: false
+  - id: A25
+    source: specs/rename/spec.md
+    text: Client settings section, account, mobile, chat and token ids use
+      `dsh-access` prefixes.
+    result: passed
+    reason:
+      text: Client identifiers correct.
+      truncated: false
+  - id: A26
+    source: specs/rename/spec.md
+    text: Runtime env lookup uses `DSH_ACCESS_ENV_FILE`; no `DSH_PASSWORDS_ENV_FILE`
+      fallback remains.
+    result: passed
+    reason:
+      text: No legacy env fallback.
+      truncated: false
+  - id: A27
+    source: specs/rename/spec.md
+    text: Runtime log labels use `[dsh-access]` where the label is user-visible in
+      the console.
+    result: passed
+    reason:
+      text: Log labels correct.
+      truncated: false
+  - id: A28
+    source: specs/rename/spec.md
+    text: Every active client request uses the new `/api/dsh-access/...` prefix
+      instead of the legacy prefix.
+    result: passed
+    reason:
+      text: Client requests correct.
+      truncated: false
+  - id: A29
+    source: specs/rename/spec.md
+    text: Gateway exact-route registration, remote-access authentication, request
+      policy checks and tests use the new prefix.
+    result: passed
+    reason:
+      text: Gateway routes/policy/tests correct.
+      truncated: false
+  - id: A30
+    source: specs/rename/spec.md
+    text: No old API alias is registered.
+    result: passed
+    reason:
+      text: No legacy API alias.
+      truncated: false
+  - id: A31
+    source: specs/rename/spec.md
+    text: Existing response models, authentication, permissions and database records
+      remain unchanged.
+    result: passed
+    reason:
+      text: Behavior/database/auth structures preserved.
+      truncated: false
+  - id: A32
+    source: specs/rename/spec.md
+    text: Settings section label remains `访问管理`.
+    result: passed
+    reason:
+      text: Settings label preserved.
+      truncated: false
+  - id: A33
+    source: specs/rename/spec.md
+    text: Page title and error/login copy use `访问管理` / `Access management`.
+    result: passed
+    reason:
+      text: User-facing copy preserved.
+      truncated: false
+  - id: A34
+    source: specs/rename/spec.md
+    text: Account tab remains `账号权限`; remote tab remains `远程访问`.
+    result: passed
+    reason:
+      text: Existing tabs preserved.
+      truncated: false
+  - id: A35
+    source: specs/rename/spec.md
+    text: Active README and installation docs use the new package/repository/CLI
+      names and do not present the legacy package as an installable identity.
+    result: passed
+    reason:
+      text: Active docs/install identity correct.
+      truncated: false
+  - id: A36
+    source: specs/rename/spec.md
+    text: Technical historical archive text may retain provenance only if it is not
+      shipped as active package documentation; shipped files and active source
+      must not expose the old name.
+    result: passed
+    reason:
+      text: Legacy identifiers absent from active payload.
+      truncated: false
+  - id: A37
+    source: specs/rename/spec.md
+    text: This change does not push to GitHub or modify any remote repository.
+    result: passed
+    reason:
+      text: GitHub push out of scope.
+      truncated: false
+  - id: A38
+    source: specs/rename/spec.md
+    text: Commit the verified candidate on `comet/rename-to-dsh-access`.
+    result: passed
+    reason:
+      text: Candidate committed on change branch.
+      truncated: false
+  - id: A39
+    source: specs/rename/spec.md
+    text: Finish the Native change by merging the candidate into the local `main`
+      branch.
+    result: passed
+    reason:
+      text: Local merge is Archive action.
+      truncated: false
+  - id: A40
+    source: specs/rename/spec.md
+    text: Leave the configured GitHub remote and `xiongx9527/dsh-passwords-ext`
+      untouched; remote synchronization is a later independent change.
+    result: passed
+    reason:
+      text: Remote/old fork untouched.
+      truncated: false
+  - id: A41
+    source: specs/rename/spec.md
+    text: Do not rename SQLite files, tables, database fields, SETUP_KEY-derived
+      values, or gateway port configuration.
+    result: passed
+    reason:
+      text: SQLite/schema/derived keys/port unchanged.
+      truncated: false
+  - id: A42
+    source: specs/rename/spec.md
+    text: Do not change remote access behavior, QR generation, tunnel behavior,
+      mobile layout, account behavior or password policy.
+    result: passed
+    reason:
+      text: Existing behavior tests pass.
+      truncated: false
+  - id: A43
+    source: specs/rename/spec.md
+    text: The old package/API/env identifiers are intentionally not supported after
+      this change.
+    result: passed
+    reason:
+      text: Legacy aliases unsupported.
+      truncated: false
+  - id: A44
+    source: specs/rename/spec.md
+    text: an active-source scan for legacy package, repository, component and
+      environment identifiers returns no hits, excluding Git history and
+      explicitly retained provenance artifacts.
+    result: passed
+    reason:
+      text: Active scan clean.
+      truncated: false
+  - id: A45
+    source: specs/rename/spec.md
+    text: "`npm test` passes."
+    result: passed
+    reason:
+      text: 104 tests passed.
+      truncated: false
+  - id: A46
+    source: specs/rename/spec.md
+    text: "`npm run build` passes."
+    result: passed
+    reason:
+      text: Build passed.
+      truncated: false
+  - id: A47
+    source: specs/rename/spec.md
+    text: "`npm pack --dry-run` lists `dsh-access-1.0.0.tgz`."
+    result: passed
+    reason:
+      text: Pack output correct.
+      truncated: false
+  - id: A48
+    source: specs/rename/spec.md
+    text: New package installs and starts the access gateway using a copy of the
+      existing database; the copied database schema and account records remain
+      intact. Full original-account login and DSH Web/LAN/remote API chain
+      verification is a documented follow-up limitation, not a blocker for this
+      local rename archive.
+    result: passed
+    reason:
+      text: Existing database copy smoke passed; original-account full chain is
+        documented follow-up.
+      truncated: false
+  - id: A49
+    source: specs/rename/spec.md
+    text: Candidate changes are committed on the change branch and merged into local
+      `main` during Archive; no GitHub push is performed.
+    result: passed
+    reason:
+      text: Local merge is Archive action.
+      truncated: false
+builder_handoff:
+  candidate_id: f7a9efd0-3a8e-4122-87eb-f8621a12977c
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:a2b4cdfd-bd90-4974-8e6b-4d47a635e804
+  iteration: 2
+  summary:
+    text: 已补齐隔离 worktree 的开发依赖（npm ci --ignore-scripts），并重新确认 npm test 104/104、npm
+      run build、npm pack --dry-run、active legacy scan、tarball install 和 existing
+      database copy gateway smoke 全部通过。A8
+      口径为数据库副本启动与数据快照保持不变，原账号完整登录链路作为后续已知限制；不推送 GitHub，Archive 只合并本地
+      main。当前候选实现提交为 a2c7830，范围决策提交为 90753bf。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+    - A9
+    - A10
+    - A11
+    - A12
+    - A13
+    - A14
+    - A15
+    - A16
+    - A17
+    - A18
+    - A19
+    - A20
+    - A21
+    - A22
+    - A23
+    - A24
+    - A25
+    - A26
+    - A27
+    - A28
+    - A29
+    - A30
+    - A31
+    - A32
+    - A33
+    - A34
+    - A35
+    - A36
+    - A37
+    - A38
+    - A39
+    - A40
+    - A41
+    - A42
+    - A43
+    - A44
+    - A45
+    - A46
+    - A47
+    - A48
+    - A49
+  checks:
+    - name:
+        text: npm ci --ignore-scripts
+        truncated: false
+      result: passed
+      note:
+        text: 309 packages installed in isolated worktree
+        truncated: false
+    - name:
+        text: npm test
+        truncated: false
+      result: passed
+      note:
+        text: 104 passed, 0 failed
+        truncated: false
+    - name:
+        text: npm run build
+        truncated: false
+      result: passed
+      note:
+        text: tsc and client bundle completed
+        truncated: false
+    - name:
+        text: npm pack --dry-run
+        truncated: false
+      result: passed
+      note:
+        text: dsh-access-1.0.0.tgz
+        truncated: false
+    - name:
+        text: active payload legacy scan
+        truncated: false
+      result: passed
+      note:
+        text: No legacy identifiers in active shipped scope
+        truncated: false
+    - name:
+        text: existing database copy smoke
+        truncated: false
+      result: passed
+      note:
+        text: Copied existing platform.db retained users/schema; gateway login/status
+          returned 200
+        truncated: false
+    - name:
+        text: GitHub push
+        truncated: false
+      result: not-run
+      note:
+        text: Out of scope by explicit user decision
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: Original account login and complete DSH Web/LAN/remote API chain are
+        documented follow-up verification.
+      truncated: false
+    - text: Archive must merge the change branch into local main; no GitHub push.
+      truncated: false
+  known_limits_truncated: false
+  submitted_at: 2026-08-19T09:38:59.785Z
 blockers: []
-verification: null
+verification:
+  candidate_id: f7a9efd0-3a8e-4122-87eb-f8621a12977c
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:52d2f890-583c-493e-88a4-343acf6fceee
+  iteration: 2
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: npm-test
+      name:
+        text: npm test
+        truncated: false
+      argv_display:
+        - text: test
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 50165
+    - id: npm-build
+      name:
+        text: npm run build
+        truncated: false
+      argv_display:
+        - text: run
+          truncated: false
+        - text: build
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 34110
+    - id: npm-pack
+      name:
+        text: npm pack --dry-run
+        truncated: false
+      argv_display:
+        - text: pack
+          truncated: false
+        - text: --dry-run
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 23329
+  summary:
+    text: All local-scope acceptance items pass. Candidate is ready for Archive;
+      Archive will commit Runtime-managed formal artifacts and merge
+      comet/rename-to-dsh-access into local main. No GitHub push.
+    truncated: false
+  risks:
+    - text: Original account login and complete DSH Web/LAN/remote API chain are
+        documented follow-up verification.
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-08-19T10:01:57.849Z
 history:
   - goal_cycle: 1
     iteration: 1
@@ -59,6 +609,162 @@ history:
       text: Native confirmed acceptance criteria changed
       truncated: false
     completed_at: 2026-08-18T10:04:16.868Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A4
+      - A7
+      - A8
+      - A9
+      - A25
+      - A36
+      - A38
+      - A39
+      - A44
+      - A48
+      - A49
+    summary:
+      text: Verifier independently checked the candidate. 37 acceptance items passed,
+        9 failed, and 3 are blocked. Return to Build to remove remaining legacy
+        identifiers, run install/runtime smoke verification, and synchronize the
+        verified candidate to remote main.
+      truncated: false
+    completed_at: 2026-08-19T04:37:57.600Z
+  - goal_cycle: 2
+    iteration: 2
+    attempt: 1
+    outcome: blocked
+    unresolved_ids:
+      - A8
+      - A9
+      - A38
+      - A39
+      - A48
+      - A49
+    summary:
+      text: "Second-round verifier confirms all implementation-scope checks pass. Six
+        acceptance items remain blocked: GitHub main/tree synchronization,
+        Runtime-state cleanliness interpretation, and existing-database/full
+        runtime smoke evidence."
+      truncated: false
+    completed_at: 2026-08-19T05:35:45.213Z
+  - goal_cycle: 2
+    iteration: 2
+    attempt: 2
+    outcome: blocked
+    unresolved_ids:
+      - A8
+      - A9
+      - A38
+      - A39
+      - A48
+      - A49
+    summary:
+      text: "Third-round independent verifier found no new implementation failures.
+        The same six acceptance items remain blocked: A8, A9, A38, A39, A48,
+        A49."
+      truncated: false
+    completed_at: 2026-08-19T05:46:52.079Z
+  - goal_cycle: 2
+    iteration: 2
+    attempt: 2
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 用户决定不推送 GitHub，改为本地提交候选并合并到 main；GitHub 同步从本 change
+        验收范围延期，后续另行处理。现有实现代码和本地验证保留，回到 Build 更新正式 brief/spec 后重新验收。
+      truncated: false
+    completed_at: 2026-08-19T05:55:04.623Z
+  - goal_cycle: 2
+    iteration: 3
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native confirmed acceptance criteria changed
+      truncated: false
+    completed_at: 2026-08-19T05:57:29.046Z
+  - goal_cycle: 3
+    iteration: 1
+    attempt: 1
+    outcome: blocked
+    unresolved_ids:
+      - A8
+      - A48
+    summary:
+      text: Implementation and local-scope requirements pass. A8 and A48 remain
+        blocked only because the existing database/original-account full runtime
+        smoke was not demonstrated; GitHub push is no longer in scope and local
+        merge is reserved for Archive.
+      truncated: false
+    completed_at: 2026-08-19T06:21:14.266Z
+  - goal_cycle: 3
+    iteration: 1
+    attempt: 2
+    outcome: blocked
+    unresolved_ids:
+      - A8
+      - A48
+    summary:
+      text: No implementation failures found. A8 and A48 remain blocked for missing
+        original-account full runtime evidence; local merge is deliberately
+        deferred to Archive and GitHub push is out of scope.
+      truncated: false
+    completed_at: 2026-08-19T07:37:17.271Z
+  - goal_cycle: 3
+    iteration: 1
+    attempt: 2
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 用户明确接受 A8/A48 作为已知限制：本 change 只验收包安装、既有数据库副本启动和网关 smoke，不要求原账号完整登录链路；不推送
+        GitHub，Archive 只合并本地 main。正式 brief/spec 已同步。
+      truncated: false
+    completed_at: 2026-08-19T09:06:20.874Z
+  - goal_cycle: 3
+    iteration: 2
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native confirmed acceptance criteria changed
+      truncated: false
+    completed_at: 2026-08-19T09:07:29.453Z
+  - goal_cycle: 4
+    iteration: 1
+    attempt: 1
+    outcome: execution-error
+    unresolved_ids: []
+    summary:
+      text: "Native Verifier response was invalid: Native verification cannot pass
+        before every required check succeeds"
+      truncated: false
+    completed_at: 2026-08-19T09:36:37.983Z
+  - goal_cycle: 4
+    iteration: 1
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Runtime check execution failed because the isolated worktree did not have
+        node_modules/tsx. Dependencies have now been installed with npm ci
+        --ignore-scripts; rerun the required checks from Build before Verify.
+      truncated: false
+    completed_at: 2026-08-19T09:38:01.420Z
+  - goal_cycle: 4
+    iteration: 2
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: All local-scope acceptance items pass. Candidate is ready for Archive;
+        Archive will commit Runtime-managed formal artifacts and merge
+        comet/rename-to-dsh-access into local main. No GitHub push.
+      truncated: false
+    completed_at: 2026-08-19T10:01:57.849Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null
@@ -69,7 +775,7 @@ history_overflow:
     blocked: 0
     execution-error: 0
     recovery: 0
-verification_result: pending
-verification_report: null
+verification_result: pass
+verification_report: verification.md
 archived: false
 created_at: 2026-08-18T04:51:36.312Z
