@@ -479,6 +479,8 @@ export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshaccess'>)
     h('dt', null, t('sandboxLabel')), h('dd', null, me.sandboxMode ?? '-'),
     h('dt', null, t('uploadLabel')), h('dd', null, me.allowUpload ? t('yes') : t('no')),
     h('dt', null, t('gitLabel')), h('dd', null, me.allowGitDownload ? t('yes') : t('no')),
+    h('dt', null, t('hourlyQuotaLabel')), h('dd', null, me.hourlyTokenLimit === null || me.hourlyTokenLimit === undefined ? t('unlimited') : String(me.hourlyTokenLimit)),
+    h('dt', null, t('dailyQuotaLabel')), h('dd', null, me.dailyMinutesLimit === null || me.dailyMinutesLimit === undefined ? t('unlimited') : `${String(me.dailyMinutesLimit)} min`),
   ) : null,
   me?.role === 'admin' ? h('button', { type: 'button', className: 'dsh-access-account-manage', onClick: () => { setOpen(false); setAdminOpen(true); } }, t('accountManage')) : null,
   error ? h('div', { className: 'dsh-access-error' }, error) : null,
