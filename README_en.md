@@ -42,17 +42,47 @@ The owner can configure, per subuser, from the settings page:
 
 ## Screenshots
 
-| Login page (light · follows system) | Login page (dark · follows dsh theme) |
-|---|---|
-| <img src="docs/screenshots/login-light.png" width="380"> | <img src="docs/screenshots/login-dark.png" width="380"> |
+The following screenshots are captured from the current local DSH Web runtime.
 
-| First-time setup page (first visit) | dsh main UI (after login) |
-|---|---|
-| <img src="docs/screenshots/setup-page.png" width="380"> | <img src="docs/screenshots/dsh-ui.png" width="380"> |
+### 1. DSH main interface
 
-| Auth code | Terminal tests |
-|---|---|
-| <img src="docs/screenshots/code-auth.png" width="380"> | <img src="docs/screenshots/terminal-test.png" width="380"> |
+<img src="docs/screenshots/dsh-access-main.png" width="900">
+
+### 2. Account permissions
+
+<img src="docs/screenshots/dsh-access-account-permissions.png" width="900">
+
+### 3. Remote access
+
+<img src="docs/screenshots/dsh-access-remote-access.png" width="900">
+
+### 4. Access management login page
+
+<img src="docs/screenshots/dsh-access-login.png" width="900">
+
+### 5. Owner account (Admin)
+
+<img src="docs/screenshots/dsh-access-admin-user-menu.png" width="900">
+
+### 6. Admin account management
+
+After clicking the Admin account entry, the owner can create and manage subusers.
+
+<img src="docs/screenshots/dsh-access-admin-account-management.png" width="900">
+
+### 7. Subuser account (Guest)
+
+<img src="docs/screenshots/dsh-access-guest-user-menu.png" width="900">
+
+### 8. Conversation page
+
+<img src="docs/screenshots/dsh-access-conversation.png" width="900">
+
+### 9. Chat and messages panel
+
+Click the chat entry in the bottom-left corner to view messages and leave a categorized item under issue, pull request, discussion, announcement, or question.
+
+<img src="docs/screenshots/dsh-access-chat-box.png" width="900">
 
 ## Quick start
 
