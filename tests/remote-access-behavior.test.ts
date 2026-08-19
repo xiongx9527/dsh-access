@@ -36,7 +36,7 @@ test('mobile navigation helper toggles the document marker', () => {
   setMobileNavigationOpen(true, { toggleAttribute: (name, force) => { calls.push([name, Boolean(force)]); return true; } });
   setMobileNavigationOpen(false, { toggleAttribute: (name, force) => { calls.push([name, Boolean(force)]); return false; } });
   assert.deepEqual(calls, [
-    ['data-dshpw-mobile-nav-open', true],
-    ['data-dshpw-mobile-nav-open', false],
+    ['data-dsh-access-mobile-nav-open', true],
+    ['data-dsh-access-mobile-nav-open', false],
   ]);
 });

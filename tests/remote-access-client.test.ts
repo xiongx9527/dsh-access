@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 test('settings card has account and remote tabs while keeping gateway port in the shared area', () => {
   const source = readFileSync(new URL('../src/client/card.tsx', import.meta.url), 'utf8');
-  const tabs = source.indexOf("className: 'dshpw-tabs'");
+  const tabs = source.indexOf("className: 'dsh-access-tabs'");
   const port = source.indexOf("t('gatewayPort')");
   const password = source.indexOf("t('chgPw')");
   assert.ok(port >= 0 && tabs > port && password > tabs);

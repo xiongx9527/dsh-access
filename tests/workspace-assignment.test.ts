@@ -12,7 +12,7 @@ async function loadAssignments() {
 
 test('username mode creates and returns the canonical username directory', async () => {
   const assignments = await loadAssignments();
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dshpw-workspaces-'));
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-workspaces-'));
   const result = assignments.assignWorkspace({ mode: 'username', username: 'alice', baseRoot: temp });
 
   assert.deepEqual(result, {
@@ -24,7 +24,7 @@ test('username mode creates and returns the canonical username directory', async
 
 test('specified mode accepts exactly one existing accessible directory', async () => {
   const assignments = await loadAssignments();
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dshpw-specified-'));
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-specified-'));
   const selected = path.join(temp, 'project');
   mkdirSync(selected);
 
@@ -36,7 +36,7 @@ test('specified mode accepts exactly one existing accessible directory', async (
 
 test('specified mode rejects a missing directory instead of changing permissions', async () => {
   const assignments = await loadAssignments();
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dshpw-missing-'));
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-missing-'));
   assert.throws(
     () => assignments.assignWorkspace({
       mode: 'specified',
@@ -50,7 +50,7 @@ test('specified mode rejects a missing directory instead of changing permissions
 
 test('username mode rejects invalid usernames before creating directories', async () => {
   const assignments = await loadAssignments();
-  const temp = mkdtempSync(path.join(os.tmpdir(), 'dshpw-invalid-user-'));
+  const temp = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-invalid-user-'));
   assert.throws(
     () => assignments.assignWorkspace({ mode: 'username', username: '../admin', baseRoot: temp }),
     /username/i,

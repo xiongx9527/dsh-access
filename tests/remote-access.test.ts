@@ -44,7 +44,7 @@ test('remote status and QR refresh when the gateway port changes', async () => {
   const encoded: string[] = [];
   const service = new RemoteAccessService({
     gatewayPort: 3088,
-    home: '/tmp/dshpw-test',
+    home: '/tmp/dsh-access-test',
     tunnel,
     networkInterfacesFn: () => ({ en0: [addr('192.168.1.199')] }),
     qrEncoder: async (url) => { encoded.push(url); return `qr:${url}`; },
@@ -68,7 +68,7 @@ test('remote status and QR refresh when the gateway port changes', async () => {
 test('remote status exposes null LAN fields when no usable interface exists', async () => {
   const service = new RemoteAccessService({
     gatewayPort: 3088,
-    home: '/tmp/dshpw-test',
+    home: '/tmp/dsh-access-test',
     tunnel: new FakeTunnel(),
     networkInterfacesFn: () => ({ lo0: [addr('127.0.0.1', true)] }),
     qrEncoder: async (url) => `qr:${url}`,

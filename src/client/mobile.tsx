@@ -4,10 +4,10 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 const MOBILE_QUERY = '(max-width: 640px)';
 
 export function setMobileNavigationOpen(open: boolean, root: Pick<HTMLElement, 'toggleAttribute'> | null = typeof document === 'undefined' ? null : document.documentElement): void {
-  root?.toggleAttribute('data-dshpw-mobile-nav-open', open);
+  root?.toggleAttribute('data-dsh-access-mobile-nav-open', open);
 }
 
-export function MobileNavigation(props: PropsLocale<'dshpw'>) {
+export function MobileNavigation(props: PropsLocale<'dshaccess'>) {
   const [mobile, setMobile] = useState(false);
   const [open, setOpenState] = useState(false);
 
@@ -37,10 +37,10 @@ export function MobileNavigation(props: PropsLocale<'dshpw'>) {
   const close = () => { setOpenState(false); setMobileNavigationOpen(false); };
   return h(
     'div',
-    { className: 'dshpw-mobile-nav' },
-    open ? h('button', { className: 'dshpw-mobile-backdrop', 'aria-label': props.t('mobileCloseNav'), onClick: close }) : null,
+    { className: 'dsh-access-mobile-nav' },
+    open ? h('button', { className: 'dsh-access-mobile-backdrop', 'aria-label': props.t('mobileCloseNav'), onClick: close }) : null,
     h('button', {
-      className: 'dshpw-mobile-toggle',
+      className: 'dsh-access-mobile-toggle',
       'aria-label': open ? props.t('mobileCloseNav') : props.t('mobileOpenNav'),
       'aria-expanded': open,
       onClick: toggle,

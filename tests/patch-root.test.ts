@@ -7,7 +7,7 @@ import { findDshRoot, patchStatus, applyRemotePatch } from '../src/patch.js';
 import { readFileSync } from 'node:fs';
 
 function fixture(t: test.TestContext) {
-  const prefix = mkdtempSync(path.join(os.tmpdir(), 'dshpw-patch-root-'));
+  const prefix = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-patch-root-'));
   t.after(() => rmSync(prefix, { recursive: true, force: true }));
   const dshPackage = path.join(prefix, 'node_modules', '@deepseek-ai', 'dsh');
   const entrypoint = path.join(dshPackage, 'lib', 'bin.js');

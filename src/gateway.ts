@@ -52,8 +52,8 @@ import { markGatewayProxyHeaders } from './local-access.js';
 
 /** 网关内部扩展请求：权限执行时把用户/权限附在 req 上，供后续中间件与代理读取 */
 type Req = Request & {
-  dshpwUser?: number;
-  dshpwPerms?: UserPermissionsRow;
+  dshAccessUser?: number;
+  dshAccessPerms?: UserPermissionsRow;
 };
 
 export interface GatewayHooks {
@@ -63,7 +63,7 @@ export interface GatewayHooks {
 
 const COOKIE_NAME = 'dsh_gateway_token';
 /** 语言偏好 cookie（用户在登录页手动切换后持久化） */
-const LANG_COOKIE = 'dshpw_lang';
+const LANG_COOKIE = 'dsh-access-lang';
 
 /** 解析页面语言：?lang → cookie → dsh 设置(locale.preference) → 浏览器语言 → zh */
 function langOf(req: Request): Lang {
@@ -1439,8 +1439,8 @@ export function createGatewayServer(
           }
         }
         // 附上权限与用户，供后续文件夹限制中间件 / 代理 token 计量使用
-        (req as Req).dshpwUser = user.userId;
-        (req as Req).dshpwPerms = perms;
+        (req as Req).dshAccessUser = user.userId;
+        (req as Req).dshAccessPerms = perms;
       }
       return next();
     } catch {
@@ -1516,7 +1516,7 @@ export function createGatewayServer(
 
         // ── host.listDirectory 响应：把 Home/面包屑钉在授权根，避免展示或导航到父目录 ──
         if (
-          reqAs.dshpwPerms !== undefined &&
+          reqAs.dshAccessPerms !== undefined &&
           req.method === 'POST' &&
           HOST_LIST_DIRECTORY_RE.test(parsedUrl.pathname)
         ) {
@@ -1528,7 +1528,7 @@ export function createGatewayServer(
               const enc = String(upstreamRes.headers['content-encoding'] ?? '');
               if (enc.includes('gzip')) body = zlib.gunzipSync(body);
               const parsed = JSON.parse(body.toString('utf8'));
-              const restricted = restrictDirectoryListing(parsed, reqAs.dshpwPerms!);
+              const restricted = restrictDirectoryListing(parsed, reqAs.dshAccessPerms!);
               const out = Buffer.from(JSON.stringify(restricted), 'utf8');
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               delete respHeaders['content-length'];
@@ -1562,9 +1562,9 @@ export function createGatewayServer(
               collectIdPathPairs(parsed, workspacePathById);
               collectWorkspaceSessionCounts(parsed, workspaceSessionCountById);
               const restricted =
-                reqAs.dshpwPerms !== undefined;
+                reqAs.dshAccessPerms !== undefined;
               const outBody = restricted
-                ? filterByPathField(parsed, reqAs.dshpwPerms!.allowed_folders, 'path')
+                ? filterByPathField(parsed, reqAs.dshAccessPerms!.allowed_folders, 'path')
                 : parsed;
               const out = Buffer.from(JSON.stringify(outBody), 'utf8');
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
@@ -1585,7 +1585,7 @@ export function createGatewayServer(
 
         // ── session.list 响应过滤：受限子用户只看得到白名单内工作区的会话 ──
         if (
-          reqAs.dshpwPerms !== undefined &&
+          reqAs.dshAccessPerms !== undefined &&
           req.method === 'POST' &&
           /^\/api\/session[.\/]list$/.test(parsedUrl.pathname)
         ) {
@@ -1599,7 +1599,7 @@ export function createGatewayServer(
               const parsed = JSON.parse(body.toString('utf8'));
               sessionPathById.clear();
               collectSessionPathPairs(parsed, sessionPathById);
-              const filtered = filterByPathField(parsed, reqAs.dshpwPerms!.allowed_folders, 'cwd');
+              const filtered = filterByPathField(parsed, reqAs.dshAccessPerms!.allowed_folders, 'cwd');
               const out = Buffer.from(JSON.stringify(filtered), 'utf8');
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               delete respHeaders['content-length'];
@@ -1655,30 +1655,30 @@ export function createGatewayServer(
     //   1) 文件夹白名单：session.create/fork 的 cwd/workspaceId 必须在授权目录内
     //   2) 沙盒权限：settings.mutate 试图把 defaultPreset 切到高于授权级别 → 403
     const needsFolderCheck =
-      reqAs.dshpwPerms !== undefined &&
+      reqAs.dshAccessPerms !== undefined &&
       (req.method === 'POST' || req.method === 'PUT') &&
       (WORKSPACE_ENDPOINT_RE.test(parsedUrl.pathname) ||
         HOST_FILESYSTEM_ENDPOINT_RE.test(parsedUrl.pathname) ||
         isAionuiPanel(parsedUrl.pathname));
     const needsSandboxCheck =
-      reqAs.dshpwPerms !== undefined &&
-      reqAs.dshpwPerms.sandbox_mode !== null &&
+      reqAs.dshAccessPerms !== undefined &&
+      reqAs.dshAccessPerms.sandbox_mode !== null &&
       (req.method === 'POST' || req.method === 'PUT') &&
       /^\/api\/settings[.\/]/.test(parsedUrl.pathname);
     // 沙盒切换的实际主路径是 /permission slash 命令：经 commands/execute RPC
     // （body { agentId, line }，line 形如 "/permission workspace-write"），
     // 而不是 settings.mutate。这里对受限子用户同样做越权预设检查。
     const needsCommandCheck =
-      reqAs.dshpwPerms !== undefined &&
-      reqAs.dshpwPerms.sandbox_mode !== null &&
+      reqAs.dshAccessPerms !== undefined &&
+      reqAs.dshAccessPerms.sandbox_mode !== null &&
       (req.method === 'POST' || req.method === 'PUT') &&
       /^\/api\/commands[.\/]execute$/.test(parsedUrl.pathname);
     // AI 提权审批：沙盒升级经 /api/respond（body { sessionId, approvalId, outcome }）。
     // 受限子用户（sandbox_mode 非空）即使点了“允许”，也强制改成 rejected，把 AI 的
     // 越权提权直接取消。ask_user_question 用的是 answer 字段，不会被这里误伤。
     const needsApprovalCheck =
-      reqAs.dshpwPerms !== undefined &&
-      reqAs.dshpwPerms.sandbox_mode !== null &&
+      reqAs.dshAccessPerms !== undefined &&
+      reqAs.dshAccessPerms.sandbox_mode !== null &&
       (req.method === 'POST' || req.method === 'PUT') &&
       /^\/api\/respond$/.test(parsedUrl.pathname);
 
@@ -1723,8 +1723,8 @@ export function createGatewayServer(
               }
             } else if (HOST_LIST_DIRECTORY_RE.test(parsedUrl.pathname)) {
               targetPath = extractPathFromBody(bodyObj);
-              if (targetPath === null && reqAs.dshpwPerms!.workspace_root !== null) {
-                targetPath = reqAs.dshpwPerms!.workspace_root;
+              if (targetPath === null && reqAs.dshAccessPerms!.workspace_root !== null) {
+                targetPath = reqAs.dshAccessPerms!.workspace_root;
                 bodyObj = injectRpcPayloadPath(bodyObj, targetPath);
                 bodyRewritten = true;
               }
@@ -1733,7 +1733,7 @@ export function createGatewayServer(
               const name = findStringField(bodyObj, 'name');
               targetPath = parentPath !== null && name !== null ? path.resolve(parentPath, name) : null;
               const assignedRank =
-                SANDBOX_RANK[reqAs.dshpwPerms!.sandbox_mode as keyof typeof SANDBOX_RANK] ?? 0;
+                SANDBOX_RANK[reqAs.dshAccessPerms!.sandbox_mode as keyof typeof SANDBOX_RANK] ?? 0;
               if (assignedRank < SANDBOX_RANK['workspace-write']) {
                 upstreamReq.destroy();
                 res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.sandboxDenied')));
@@ -1752,12 +1752,12 @@ export function createGatewayServer(
                   if (
                     targetPath === null &&
                     SESSION_CREATE_RE.test(parsedUrl.pathname) &&
-                    reqAs.dshpwPerms!.workspace_root !== null
+                    reqAs.dshAccessPerms!.workspace_root !== null
                   ) {
-                    await ensureWorkspace(reqAs.dshpwPerms!.workspace_root).catch(() => undefined);
+                    await ensureWorkspace(reqAs.dshAccessPerms!.workspace_root).catch(() => undefined);
                     await refreshWorkspacePathMap().catch(() => undefined);
                     const rootEntry = [...workspacePathById.entries()]
-                      .find(([, workspacePath]) => workspacePath === reqAs.dshpwPerms!.workspace_root);
+                      .find(([, workspacePath]) => workspacePath === reqAs.dshAccessPerms!.workspace_root);
                     if (rootEntry !== undefined) {
                       targetPath = rootEntry[1];
                       bodyObj = replaceRpcWorkspaceId(bodyObj, rootEntry[0]);
@@ -1781,7 +1781,7 @@ export function createGatewayServer(
           if (
             WORKSPACE_DELETE_RE.test(parsedUrl.pathname) &&
             targetPath !== null &&
-            targetPath === reqAs.dshpwPerms!.workspace_root
+            targetPath === reqAs.dshAccessPerms!.workspace_root
           ) {
             upstreamReq.destroy();
             sendRpcDenied(res, bodyObj, 'workspace-root-required', t(lang, 'gw.workspaceRootRequired'));
@@ -1795,7 +1795,7 @@ export function createGatewayServer(
               return;
             }
           }
-          if (targetPath === null || !permissionPathAllowed(reqAs.dshpwPerms!, targetPath)) {
+          if (targetPath === null || !permissionPathAllowed(reqAs.dshAccessPerms!, targetPath)) {
             upstreamReq.destroy();
             res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.folderDenied')));
             return;
@@ -1805,7 +1805,7 @@ export function createGatewayServer(
         if (needsSandboxCheck && bodyObj !== null) {
           const preset = presetFromSettingsMutate(bodyObj);
           const assignedRank =
-            SANDBOX_RANK[reqAs.dshpwPerms!.sandbox_mode as keyof typeof SANDBOX_RANK] ?? 0;
+            SANDBOX_RANK[reqAs.dshAccessPerms!.sandbox_mode as keyof typeof SANDBOX_RANK] ?? 0;
           const targetRank = preset === null ? assignedRank : sandboxPresetRank(preset);
           if (targetRank > assignedRank) {
             res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.sandboxDenied')));
@@ -1818,7 +1818,7 @@ export function createGatewayServer(
           const preset = line === null ? null : permissionPresetFromCommand(line);
           if (preset !== null) {
             const assignedRank =
-              SANDBOX_RANK[reqAs.dshpwPerms!.sandbox_mode as keyof typeof SANDBOX_RANK] ?? 0;
+              SANDBOX_RANK[reqAs.dshAccessPerms!.sandbox_mode as keyof typeof SANDBOX_RANK] ?? 0;
             const targetRank = sandboxPresetRank(preset);
             if (targetRank > assignedRank) {
               res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.sandboxDenied')));

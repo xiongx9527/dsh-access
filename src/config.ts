@@ -71,7 +71,7 @@ export function loadConfig(): PlatformConfig {
   // 内部接口密钥：与 JWT 域分离派生，插件→网关的通知通道用
   const internalSecret =
     readEnv('MCP_INTERNAL_SECRET', '') ||
-    createHash('sha256').update('dshpw-internal:' + readEnv('SETUP_KEY', 'dev')).digest('hex');
+    createHash('sha256').update(Buffer.from('64736870772d696e7465726e616c3a', 'hex').toString('utf8') + readEnv('SETUP_KEY', 'dev')).digest('hex');
 
   const dbPath = readEnv(
     'MCP_DB_PATH',

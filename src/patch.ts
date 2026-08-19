@@ -17,7 +17,7 @@ import { readFileSync, writeFileSync, existsSync, realpathSync, statSync } from 
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 
-const BAK_SUFFIX = '.bak-dshpw';
+const BAK_SUFFIX = '.bak-dshaccess';
 
 /** 客户端设置持久化文件（强制 host 模式） */
 const SETTINGS_TARGET = path.join(
@@ -168,7 +168,7 @@ export function applyRemotePatch(dshRoot: string): 'applied' | 'unchanged' | 'mi
 }
 
 /**
- * 回滚补丁：从 .bak-dshpw 备份恢复两个目标文件。
+ * 回滚补丁：从 .bak-dshaccess 备份恢复两个目标文件。
  * 备份不存在（从未打过补丁）时返回 'no-backup'。
  */
 export function rollbackPatch(dshRoot: string): 'rolled-back' | 'no-backup' | 'missing' {

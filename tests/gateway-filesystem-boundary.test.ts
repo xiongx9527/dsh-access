@@ -29,7 +29,7 @@ test('guest directory browser starts at its workspace and cannot create outside 
   const admin = fixture.db.getUserByUsername('admin')!;
   await fixture.auth.addSubUser({ userId: admin.id, username: admin.username, role: 'admin' }, 'guest', USER_PASSWORD);
   const guest = fixture.db.getUserByUsername('guest')!;
-  const root = mkdtempSync(path.join(os.tmpdir(), 'dshpw-guest-root-'));
+  const root = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-guest-root-'));
   const inside = path.join(root, 'inside');
   mkdirSync(inside);
   fixture.db.setPermissions(guest.id, {
@@ -99,7 +99,7 @@ test('guest directory browser starts at its workspace and cannot create outside 
     sandboxMode: 'workspace-write', workspaceMode: 'specified', workspaceRoot: root, remark: '',
   });
 
-  const outsideParent = mkdtempSync(path.join(os.tmpdir(), 'dshpw-outside-'));
+  const outsideParent = mkdtempSync(path.join(os.tmpdir(), 'dsh-access-outside-'));
   const outsideTarget = path.join(outsideParent, 'escape');
   const outside = await fetch(`${baseUrl}/api/host.createDirectory`, {
     method: 'POST', headers,

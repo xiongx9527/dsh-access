@@ -1,4 +1,4 @@
-// dsh-access 设置卡片的双语词典（locale 命名空间 'dshpw'）。
+// dsh-access 设置卡片的双语词典（locale 命名空间 'dshaccess'）。
 // 注册进 dsh 的 locale 服务后，卡片文字跟随 dsh 设置里的语言
 // （设置 → 通用 → 语言 / Settings → General → Language），切换即生效。
 //
@@ -359,12 +359,12 @@ export const en: Record<keyof typeof zh, string> = {
   'err.INTERNAL': 'Internal error',
 };
 
-export type DshpwKey = keyof typeof zh;
+export type DshAccessKey = keyof typeof zh;
 
 // 类型合并：让 locale 服务的 register/bind 与卡片的 t seat 对本命名空间强类型。
 // （客户端代码由 esbuild 构建，类型导入会在产物中擦除，不影响运行时。）
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    dshpw: DshpwKey;
+    dshaccess: DshAccessKey;
   }
 }

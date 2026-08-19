@@ -34,7 +34,7 @@ test('gateway port replacement preserves unrelated env configuration', () => {
 });
 
 test('gateway port write is persisted without changing other env values', () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'dshpw-gateway-port-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'dsh-access-gateway-port-'));
   const envPath = path.join(root, '.env');
   try {
     writeFileSync(envPath, 'SETUP_KEY=secret\nMCP_GATEWAY_PORT=3088\n', 'utf8');

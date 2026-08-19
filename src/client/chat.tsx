@@ -50,7 +50,7 @@ function mergeById(prev: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] 
 }
 
 /** 聊天入口 + 面板（挂在 shell.overlay 槽） */
-export function ChatLauncher(props: PropsLocale<'dshpw'>) {
+export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   const t = props.t;
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -180,12 +180,12 @@ export function ChatLauncher(props: PropsLocale<'dshpw'>) {
     <>
       <button
         type="button"
-        className={'dshpw-chat-fab' + (shaking ? ' shaking' : '')}
+        className={'dsh-access-chat-fab' + (shaking ? ' shaking' : '')}
         aria-label={t('chat.open')}
         title={t('chat.open')}
         onClick={openPanel}
       >
-        <span className="dshpw-chat-fab-inner">
+        <span className="dsh-access-chat-fab-inner">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
               d="M4 6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H9l-4 4v-4H7a3 3 0 0 1-3-3V6z"
@@ -195,42 +195,42 @@ export function ChatLauncher(props: PropsLocale<'dshpw'>) {
             />
           </svg>
           {unread > 0 && (
-            <span className="dshpw-chat-badge">{unread > 99 ? '99+' : String(unread)}</span>
+            <span className="dsh-access-chat-badge">{unread > 99 ? '99+' : String(unread)}</span>
           )}
         </span>
       </button>
 
       {open && (
         <div
-          className={'dshpw-chat-backdrop' + (closing ? ' closing' : '')}
+          className={'dsh-access-chat-backdrop' + (closing ? ' closing' : '')}
           onClick={close}
           role="dialog"
           aria-modal="true"
           aria-label={t('chat.title')}
         >
-          <div className={'dshpw-chat-panel' + (closing ? ' closing' : '')} onClick={(e) => e.stopPropagation()}>
-            <div className="dshpw-chat-header">
-              <span className="dshpw-chat-title">{t('chat.title')}</span>
-              <button type="button" className="dshpw-chat-close" aria-label={t('chat.close')} onClick={close}>
+          <div className={'dsh-access-chat-panel' + (closing ? ' closing' : '')} onClick={(e) => e.stopPropagation()}>
+            <div className="dsh-access-chat-header">
+              <span className="dsh-access-chat-title">{t('chat.title')}</span>
+              <button type="button" className="dsh-access-chat-close" aria-label={t('chat.close')} onClick={close}>
                 ×
               </button>
             </div>
 
-            <div className="dshpw-chat-list" ref={listRef}>
-              {messages.length === 0 && <div className="dshpw-chat-empty">{t('chat.empty')}</div>}
+            <div className="dsh-access-chat-list" ref={listRef}>
+              {messages.length === 0 && <div className="dsh-access-chat-empty">{t('chat.empty')}</div>}
               {messages.map((m) => {
                 const mine = me ? m.sender_id === me.id : false;
                 return (
-                  <div key={m.id} className={'dshpw-chat-msg' + (mine ? ' mine' : '')}>
-                    <div className="dshpw-chat-meta">
-                      <span className="dshpw-chat-author">{mine ? t('chat.you') : m.sender_name}</span>
-                      <span className="dshpw-chat-time">{fmtTime(m.created_at)}</span>
+                  <div key={m.id} className={'dsh-access-chat-msg' + (mine ? ' mine' : '')}>
+                    <div className="dsh-access-chat-meta">
+                      <span className="dsh-access-chat-author">{mine ? t('chat.you') : m.sender_name}</span>
+                      <span className="dsh-access-chat-time">{fmtTime(m.created_at)}</span>
                     </div>
-                    <div className="dshpw-chat-content">{m.content}</div>
+                    <div className="dsh-access-chat-content">{m.content}</div>
                     {m.tags.length > 0 && (
-                      <div className="dshpw-chat-tags">
+                      <div className="dsh-access-chat-tags">
                         {m.tags.map((tag) => (
-                          <span className="dshpw-chat-tag" key={tag}>
+                          <span className="dsh-access-chat-tag" key={tag}>
                             {tagDisplay(tag, t)}
                           </span>
                         ))}
@@ -241,22 +241,22 @@ export function ChatLauncher(props: PropsLocale<'dshpw'>) {
               })}
             </div>
 
-            <div className="dshpw-chat-composer">
-              <div className="dshpw-chat-tags">
+            <div className="dsh-access-chat-composer">
+              <div className="dsh-access-chat-tags">
                 {PRESET_TAGS.map((tag) => (
                   <button
                     type="button"
                     key={tag}
-                    className={'dshpw-chat-tagbtn' + (tags.includes(tag) ? ' active' : '')}
+                    className={'dsh-access-chat-tagbtn' + (tags.includes(tag) ? ' active' : '')}
                     onClick={() => toggleTag(tag)}
                   >
                     {tagDisplay(tag, t)}
                   </button>
                 ))}
               </div>
-              <div className="dshpw-chat-inputrow">
+              <div className="dsh-access-chat-inputrow">
                 <input
-                  className="dshpw-chat-input"
+                  className="dsh-access-chat-input"
                   value={draft}
                   placeholder={t('chat.placeholder')}
                   onChange={(e) => setDraft(e.target.value)}
@@ -267,11 +267,11 @@ export function ChatLauncher(props: PropsLocale<'dshpw'>) {
                     }
                   }}
                 />
-                <button type="button" className="dshpw-chat-send" disabled={busy || !draft.trim()} onClick={send}>
+                <button type="button" className="dsh-access-chat-send" disabled={busy || !draft.trim()} onClick={send}>
                   {t('chat.send')}
                 </button>
               </div>
-              {error && <div className="dshpw-chat-error">{error}</div>}
+              {error && <div className="dsh-access-chat-error">{error}</div>}
             </div>
           </div>
         </div>
@@ -282,46 +282,46 @@ export function ChatLauncher(props: PropsLocale<'dshpw'>) {
 
 // ── 聊天面板样式：跟随 dsh 设计令牌，主题自动适配 ───────────────
 const CHAT_CSS = `
-.dshpw-chat-fab{position:fixed;left:14px;bottom:116px;z-index:2147483000;width:36px;height:36px;border-radius:50%;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);transition:transform .18s,box-shadow .18s,background .18s;pointer-events:auto}
-.dshpw-chat-fab:hover{transform:scale(1.05);background:var(--dsw-alias-interactive-bg-hover);box-shadow:0 4px 12px rgba(0,0,0,.25)}
-.dshpw-chat-fab:active{transform:scale(.96)}
-.dshpw-chat-fab:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
-.dshpw-chat-fab.shaking{animation:dshpwShake .5s ease}
-.dshpw-chat-fab-inner{position:relative;display:flex}
-.dshpw-chat-badge{position:absolute;top:-12px;right:-9px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:600;box-shadow:0 0 0 2px var(--dsw-alias-bg-layer-2)}
-.dshpw-chat-backdrop{position:fixed;inset:0;z-index:2147482990;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(10px) saturate(.9);-webkit-backdrop-filter:blur(10px) saturate(.9);animation:dshpwChatFadeIn .2s ease;transition:opacity .18s ease}
-.dshpw-chat-backdrop.closing{opacity:0;pointer-events:none}
-.dshpw-chat-panel{display:flex;flex-direction:column;width:min(680px,calc(100vw - 48px));height:min(640px,calc(100vh - 96px));border:1px solid var(--dsw-alias-border-l2);border-radius:16px;background:var(--dsw-alias-bg-layer-2);box-shadow:0 24px 60px rgba(0,0,0,.5);overflow:hidden;animation:dshpwChatPanelIn .22s cubic-bezier(.16,1,.3,1);transition:opacity .18s ease,transform .18s ease}
-.dshpw-chat-panel.closing{opacity:0;transform:translateY(10px) scale(.98)}
-.dshpw-chat-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--dsw-alias-border-l2)}
-.dshpw-chat-title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}
-.dshpw-chat-close{width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--dsw-alias-label-tertiary);font-size:20px;line-height:1;cursor:pointer;transition:background .15s,color .15s}
-.dshpw-chat-close:hover{background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary)}
-.dshpw-chat-list{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
-.dshpw-chat-empty{color:var(--dsw-alias-label-tertiary);font-size:13px;text-align:center;margin:auto}
-.dshpw-chat-msg{align-self:flex-start;max-width:78%;padding:9px 12px;border-radius:12px;background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);animation:dshpwMsgIn .28s cubic-bezier(.16,1,.3,1)}
-.dshpw-chat-msg.mine{align-self:flex-end;background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 30%,transparent);animation:dshpwMsgMineIn .28s cubic-bezier(.16,1,.3,1)}
-.dshpw-chat-meta{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
-.dshpw-chat-author{font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
-.dshpw-chat-time{font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dshpw-chat-content{font-size:13px;line-height:1.5;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
-.dshpw-chat-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.dshpw-chat-tag{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
-.dshpw-chat-composer{border-top:1px solid var(--dsw-alias-border-l2);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
-.dshpw-chat-tagbtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;padding:3px 10px;font-size:11px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
-.dshpw-chat-tagbtn.active{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent)}
-.dshpw-chat-inputrow{display:flex;gap:8px}
-.dshpw-chat-input{flex:1;box-sizing:border-box;min-width:0;padding:8px 12px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;outline:none;transition:border-color .15s,box-shadow .15s}
-.dshpw-chat-input:focus{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--dsw-alias-brand-primary) 18%,transparent)}
-.dshpw-chat-send{appearance:none;border:0;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:500;background:var(--dsw-alias-brand-primary);color:#fff;cursor:pointer;transition:filter .15s}
-.dshpw-chat-send:hover:not(:disabled){filter:brightness(1.08)}
-.dshpw-chat-send:disabled{opacity:.4;cursor:default}
-.dshpw-chat-error{font-size:12px;color:var(--dsw-alias-label-error)}
-@keyframes dshpwChatFadeIn{from{opacity:0}to{opacity:1}}
-@keyframes dshpwChatPanelIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
-@keyframes dshpwMsgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-@keyframes dshpwMsgMineIn{from{opacity:0;transform:translateY(8px) translateX(8px)}to{opacity:1;transform:none}}
-@keyframes dshpwShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.dsh-access-chat-fab{position:fixed;left:14px;bottom:116px;z-index:2147483000;width:36px;height:36px;border-radius:50%;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);transition:transform .18s,box-shadow .18s,background .18s;pointer-events:auto}
+.dsh-access-chat-fab:hover{transform:scale(1.05);background:var(--dsw-alias-interactive-bg-hover);box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.dsh-access-chat-fab:active{transform:scale(.96)}
+.dsh-access-chat-fab:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.dsh-access-chat-fab.shaking{animation:dshaccessShake .5s ease}
+.dsh-access-chat-fab-inner{position:relative;display:flex}
+.dsh-access-chat-badge{position:absolute;top:-12px;right:-9px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:600;box-shadow:0 0 0 2px var(--dsw-alias-bg-layer-2)}
+.dsh-access-chat-backdrop{position:fixed;inset:0;z-index:2147482990;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(10px) saturate(.9);-webkit-backdrop-filter:blur(10px) saturate(.9);animation:dshaccessChatFadeIn .2s ease;transition:opacity .18s ease}
+.dsh-access-chat-backdrop.closing{opacity:0;pointer-events:none}
+.dsh-access-chat-panel{display:flex;flex-direction:column;width:min(680px,calc(100vw - 48px));height:min(640px,calc(100vh - 96px));border:1px solid var(--dsw-alias-border-l2);border-radius:16px;background:var(--dsw-alias-bg-layer-2);box-shadow:0 24px 60px rgba(0,0,0,.5);overflow:hidden;animation:dshaccessChatPanelIn .22s cubic-bezier(.16,1,.3,1);transition:opacity .18s ease,transform .18s ease}
+.dsh-access-chat-panel.closing{opacity:0;transform:translateY(10px) scale(.98)}
+.dsh-access-chat-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dsh-access-chat-title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dsh-access-chat-close{width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--dsw-alias-label-tertiary);font-size:20px;line-height:1;cursor:pointer;transition:background .15s,color .15s}
+.dsh-access-chat-close:hover{background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary)}
+.dsh-access-chat-list{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.dsh-access-chat-empty{color:var(--dsw-alias-label-tertiary);font-size:13px;text-align:center;margin:auto}
+.dsh-access-chat-msg{align-self:flex-start;max-width:78%;padding:9px 12px;border-radius:12px;background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);animation:dshaccessMsgIn .28s cubic-bezier(.16,1,.3,1)}
+.dsh-access-chat-msg.mine{align-self:flex-end;background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 30%,transparent);animation:dshaccessMsgMineIn .28s cubic-bezier(.16,1,.3,1)}
+.dsh-access-chat-meta{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+.dsh-access-chat-author{font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
+.dsh-access-chat-time{font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dsh-access-chat-content{font-size:13px;line-height:1.5;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.dsh-access-chat-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.dsh-access-chat-tag{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.dsh-access-chat-composer{border-top:1px solid var(--dsw-alias-border-l2);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.dsh-access-chat-tagbtn{appearance:none;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;padding:3px 10px;font-size:11px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.dsh-access-chat-tagbtn.active{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent)}
+.dsh-access-chat-inputrow{display:flex;gap:8px}
+.dsh-access-chat-input{flex:1;box-sizing:border-box;min-width:0;padding:8px 12px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;outline:none;transition:border-color .15s,box-shadow .15s}
+.dsh-access-chat-input:focus{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--dsw-alias-brand-primary) 18%,transparent)}
+.dsh-access-chat-send{appearance:none;border:0;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:500;background:var(--dsw-alias-brand-primary);color:#fff;cursor:pointer;transition:filter .15s}
+.dsh-access-chat-send:hover:not(:disabled){filter:brightness(1.08)}
+.dsh-access-chat-send:disabled{opacity:.4;cursor:default}
+.dsh-access-chat-error{font-size:12px;color:var(--dsw-alias-label-error)}
+@keyframes dshaccessChatFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes dshaccessChatPanelIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes dshaccessMsgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes dshaccessMsgMineIn{from{opacity:0;transform:translateY(8px) translateX(8px)}to{opacity:1;transform:none}}
+@keyframes dshaccessShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
 `;
 
 if (typeof document !== 'undefined') {
