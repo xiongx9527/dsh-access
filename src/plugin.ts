@@ -33,7 +33,7 @@ import {
 
 
 export interface RemoteAccessPortController {
-  stopTunnel(): Promise<unknown>;
+  stopTunnel(preserveAutoRestore?: boolean): Promise<unknown>;
   setGatewayPort(port: number): Promise<void>;
 }
 
@@ -42,7 +42,7 @@ export async function restartGatewayAndRefreshRemote(
   remote: RemoteAccessPortController | null,
   port: number,
 ): Promise<void> {
-  if (remote !== null) await remote.stopTunnel();
+  if (remote !== null) await remote.stopTunnel(true);
   await runtime.restart(port);
   if (remote !== null) await remote.setGatewayPort(port);
 }
@@ -453,6 +453,24 @@ export function apply(ctx: Context): void {
     : null;
   if (remoteAccess !== null) {
     ctx.effect(() => () => { void remoteAccess.close(); }, 'dsh-access: remote access cleanup');
+    ctx.effect(() => {
+      let disposed = false;
+      const restore = async (): Promise<void> => {
+        const deadline = Date.now() + 10_000;
+        while (!disposed && Date.now() < deadline) {
+          const running = await gatewayAlreadyRunning(remoteAccess.statusSnapshot(false).gatewayPort);
+          if (running) {
+            await remoteAccess.restoreTunnelIfNeeded(true);
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      };
+      void restore().catch((error) => {
+        console.error('[dsh-access] 公网隧道自动恢复失败:', error instanceof Error ? error.message : String(error));
+      });
+      return () => { disposed = true; };
+    }, 'dsh-access: remote tunnel auto-restore');
   }
 
   const requireAdmin = (req: IncomingMessage, res: ServerResponse): AuthedUser | null => {

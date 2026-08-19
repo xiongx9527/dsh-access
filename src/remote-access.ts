@@ -1,4 +1,6 @@
 import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import QRCode from 'qrcode';
 import { CloudflaredTunnel, type TunnelController, type TunnelSnapshot } from './tunnel.js';
 
@@ -62,10 +64,12 @@ export class RemoteAccessService {
   private readonly networkInterfacesFn: () => InterfaceMap;
   private readonly qrEncoder: (url: string) => Promise<string>;
   private readonly qrCache = new Map<string, string>();
+  private readonly autoRestorePath: string;
 
   constructor(options: RemoteAccessServiceOptions) {
     this.gatewayPort = options.gatewayPort;
     this.tunnel = options.tunnel ?? new CloudflaredTunnel({ home: options.home });
+    this.autoRestorePath = path.join(options.home, 'remote-access', 'tunnel-auto.json');
     this.networkInterfacesFn = options.networkInterfacesFn ?? networkInterfaces;
     this.qrEncoder = options.qrEncoder ?? ((url) => QRCode.toDataURL(url, {
       errorCorrectionLevel: 'M', margin: 1, width: 220, type: 'image/png',
@@ -123,12 +127,33 @@ export class RemoteAccessService {
 
   async startTunnel(): Promise<RemoteAccessStatus> {
     await this.tunnel.start(`http://127.0.0.1:${String(this.gatewayPort)}`);
+    await this.persistAutoRestore();
     return this.status(true);
   }
 
-  async stopTunnel(): Promise<RemoteAccessStatus> {
+  async stopTunnel(preserveAutoRestore = false): Promise<RemoteAccessStatus> {
     await this.tunnel.stop();
+    if (!preserveAutoRestore) await this.clearAutoRestore();
     return this.status(true);
+  }
+
+  /**
+   * Restore only an explicitly enabled tunnel.  The marker is deliberately
+   * separate from the tunnel process: a new cloudflared URL is expected after
+   * every DSH restart, while the 3088 login gate remains the only public auth.
+   */
+  async restoreTunnelIfNeeded(gatewayRunning: boolean): Promise<RemoteAccessStatus | null> {
+    if (!gatewayRunning || this.tunnel.snapshot().phase !== 'idle') return null;
+    try {
+      await readFile(this.autoRestorePath, 'utf8');
+    } catch {
+      return null;
+    }
+    try {
+      return await this.startTunnel();
+    } catch {
+      return this.status(gatewayRunning);
+    }
   }
 
   async setGatewayPort(port: number): Promise<void> {
@@ -139,4 +164,21 @@ export class RemoteAccessService {
   }
 
   async close(): Promise<void> { await this.tunnel.close(); }
+
+  private async persistAutoRestore(): Promise<void> {
+    try {
+      await mkdir(path.dirname(this.autoRestorePath), { recursive: true, mode: 0o700 });
+      await writeFile(this.autoRestorePath, JSON.stringify({ enabledAt: Date.now() }), { mode: 0o600 });
+    } catch {
+      // Tunnel access remains usable even when the optional marker cannot be written.
+    }
+  }
+
+  private async clearAutoRestore(): Promise<void> {
+    try {
+      await rm(this.autoRestorePath, { force: true });
+    } catch {
+      // Best effort: a later explicit stop can retry cleanup.
+    }
+  }
 }

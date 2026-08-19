@@ -202,6 +202,10 @@ http://192.168.1.199:3088
 - 访问者仍然需要登录访问管理
 - 隧道只转发到访问管理网关，不直接暴露 3080
 - 关闭开关后，Cloudflare 进程会停止
+- 已明确开启公网访问时，访问管理重启后会自动尝试恢复隧道；手动关闭后不会自动恢复
+- 隧道使用 HTTP/2，适合 UDP 7844 不可用的网络环境
+
+远程访问会对满足条件的大型 JSON/text 响应协商 Brotli 或 gzip 压缩；WebSocket、SSE、已压缩内容和 HTML 注入流程保持原有处理。手机窄屏访问 3088 时还会启用抽屉导航、安全区域和触控适配。
 
 ## 配置参考
 
@@ -220,6 +224,7 @@ http://192.168.1.199:3088
 | `MCP_GATEWAY_TLS_CERT` | 自定义证书路径 |
 | `MCP_GATEWAY_TLS_KEY` | 自定义私钥路径 |
 | `MCP_GATEWAY_PUBLIC_HOST` | 公网跳转使用的固定主机名或 IP |
+| `DSH_ACCESS_CLOUDFLARED_MIRRORS` | 可选的 HTTPS 下载镜像列表，多个地址用逗号分隔；官方 GitHub 源始终优先 |
 | `DSH_ACCESS_ENV_FILE` | 访问管理使用的 `.env` 文件路径 |
 | `DSH_ACCESS_NO_AUTOSTART` | 设置为 `1` 时禁止插件自动启动网关，仅用于调试 |
 

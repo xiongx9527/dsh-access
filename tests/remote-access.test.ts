@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { existsSync, mkdtempSync } from 'node:fs';
 import type { NetworkInterfaceInfo } from 'node:os';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { RemoteAccessService, selectLanIPv4 } from '../src/remote-access.js';
 import type { TunnelController, TunnelSnapshot } from '../src/tunnel.js';
 
@@ -78,4 +81,33 @@ test('remote status exposes null LAN fields when no usable interface exists', as
   assert.equal(status.lanIp, null);
   assert.equal(status.lanUrl, null);
   assert.equal(status.lanQr, null);
+});
+
+test('public tunnel intent restores after restart and explicit stop clears it', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dshpw-restore-'));
+  const service = new RemoteAccessService({
+    gatewayPort: 3088,
+    home: root,
+    tunnel: new FakeTunnel(),
+    networkInterfacesFn: () => ({ en0: [addr('192.168.1.199')] }),
+    qrEncoder: async (url) => `qr:${url}`,
+  });
+
+  await service.startTunnel();
+  assert.equal(existsSync(join(root, 'remote-access', 'tunnel-auto.json')), true);
+  await service.close();
+
+  const restoredTunnel = new FakeTunnel();
+  const restored = new RemoteAccessService({
+    gatewayPort: 3088,
+    home: root,
+    tunnel: restoredTunnel,
+    networkInterfacesFn: () => ({ en0: [addr('192.168.1.199')] }),
+    qrEncoder: async (url) => `qr:${url}`,
+  });
+  const snapshot = await restored.restoreTunnelIfNeeded(true);
+  assert.equal(snapshot?.tunnel.phase, 'running');
+  assert.equal(restoredTunnel.target, 'http://127.0.0.1:3088');
+  await restored.stopTunnel();
+  assert.equal(existsSync(join(root, 'remote-access', 'tunnel-auto.json')), false);
 });

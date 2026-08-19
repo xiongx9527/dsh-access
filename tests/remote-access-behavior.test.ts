@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { remoteAccessAuthorization } from '../src/plugin.js';
 import { isLanAccessAvailable, shouldPollTunnel, type RemoteAccessStatus } from '../src/client/remote-access.js';
 import { setMobileNavigationOpen } from '../src/client/mobile.js';
@@ -39,4 +40,18 @@ test('mobile navigation helper toggles the document marker', () => {
     ['data-dshpw-mobile-nav-open', true],
     ['data-dshpw-mobile-nav-open', false],
   ]);
+});
+
+test('mobile navigation includes drawer, safe-area and touch affordances', () => {
+  const source = readFileSync(new URL('../src/client/index.tsx', import.meta.url), 'utf8');
+  const mobileSource = readFileSync(new URL('../src/client/mobile.tsx', import.meta.url), 'utf8');
+  const chatSource = readFileSync(new URL('../src/client/chat.tsx', import.meta.url), 'utf8');
+  assert.match(mobileSource, /viewport-fit=cover/);
+  assert.match(source, /safe-area-inset-top/);
+  assert.match(source, /safe-area-inset-bottom/);
+  assert.match(source, /touch-action:manipulation/);
+  assert.match(source, /overflow-y:auto/);
+  assert.match(source, /data-dshpw-mobile-nav-open/);
+  assert.match(chatSource, /dshpw-chat-fab\{[^}]*safe-area-inset-left/);
+  assert.match(chatSource, /dshpw-chat-close\{width:44px;height:44px/);
 });
