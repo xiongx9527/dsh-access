@@ -925,7 +925,13 @@ export function createGatewayServer(
       res.type('html').send(renderSetupPage({ lang, csrf }));
       return;
     }
-    res.type('html').send(renderLoginPage({ lang, next, dbHealthy, csrf }));
+    const reason = typeof req.query.reason === 'string' ? req.query.reason : '';
+    const loginError = reason === 'credential-changed'
+      ? t(lang, 'gw.credentialsChanged')
+      : reason === 'banned' || reason === 'deleted'
+        ? t(lang, 'gw.accountRevoked')
+        : undefined;
+    res.type('html').send(renderLoginPage({ lang, next, dbHealthy, csrf, error: loginError }));
   });
 
   // ── 首次配置提交（POST）→ 302 回登录页 ────────────────────────

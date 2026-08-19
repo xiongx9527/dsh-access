@@ -394,7 +394,10 @@ export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshaccess'>)
 
   useEffect(() => {
     const stream = typeof EventSource === 'undefined' ? null : new EventSource('/gateway/api/messages/stream');
-    const revoke = () => { window.location.assign('/gateway/login'); };
+    const revoke = (event: MessageEvent<{ reason?: string }>) => {
+      const reason = event.data?.reason === 'account-banned' ? 'banned' : event.data?.reason === 'account-deleted' ? 'deleted' : 'credential-changed';
+      window.location.assign(`/gateway/login?reason=${reason}`);
+    };
     stream?.addEventListener('account-revoked', revoke);
     return () => {
       stream?.removeEventListener('account-revoked', revoke);
