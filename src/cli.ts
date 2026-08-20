@@ -28,6 +28,8 @@ import {
   patchStatus,
 } from './patch.js';
 import { t, resolveCliLang } from './i18n.js';
+import { parseGatewayHost } from './gateway-settings.js';
+import { networkInterfaces } from 'node:os';
 
 /** CLI 输出语言：LANG / LC_ALL / LC_MESSAGES 以 en 开头则英文，否则中文 */
 const lang = resolveCliLang();
@@ -164,7 +166,14 @@ async function boot() {
 
   // 启动参数覆盖 .env / 环境变量
   if (cli.port !== undefined) config.gateway.port = cli.port;
-  if (cli.host !== undefined) config.gateway.host = cli.host;
+  if (cli.host !== undefined) {
+    config.gateway.host = parseGatewayHost(
+      cli.host,
+      Object.values(networkInterfaces()).flatMap((entries) =>
+        (entries ?? []).filter((entry) => !entry.internal).map((entry) => entry.address),
+      ),
+    );
+  }
   if (cli.upstream !== undefined) config.gateway.upstream = cli.upstream;
 
   // ── 自动 HTTPS：域名补全（零配置探测公网 IP → <IP>.sslip.io）+ 端口默认 ──

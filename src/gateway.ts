@@ -10,6 +10,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import jwt from 'jsonwebtoken';
 import { type Duplex } from 'node:stream';
 import zlib from 'node:zlib';
 import { URL } from 'node:url';
@@ -31,7 +32,6 @@ import {
   isUsageAnchorRequest,
   WORKSPACE_ENDPOINT_RE,
   extractPathFromBody,
-  filterByPathField,
   collectIdPathPairs,
   extractWorkspaceId,
   findStringField,
@@ -58,7 +58,9 @@ type Req = Request & {
 
 export interface GatewayHooks {
   /** Register or idempotently resolve the canonical directory in DSH. */
-  ensureWorkspace?: (root: string) => Promise<void>;
+  ensureWorkspace?: (root: string) => Promise<boolean | void>;
+  /** Remove a workspace created by a failed account/permission transaction. */
+  removeWorkspace?: (root: string) => Promise<void>;
 }
 
 const COOKIE_NAME = 'dsh_gateway_token';
@@ -94,6 +96,30 @@ const INJECT_SCRIPT = `<script>
       return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
     };
   }
+})();
+</script>
+<script>
+(function () {
+  var redirected = false;
+  var redirect = function (reason) {
+    if (redirected) return;
+    redirected = true;
+    window.location.assign('/gateway/login?reason=' + reason);
+  };
+  var poll = window.setInterval(function () {
+    fetch('/gateway/api/me', { headers: { accept: 'application/json' } })
+      .then(function (response) {
+        if (response.ok) return;
+        return response.json().catch(function () { return {}; }).then(function (body) {
+          var reason = body.code === 'ACCOUNT_BANNED' ? 'banned'
+            : body.code === 'ACCOUNT_DELETED' ? 'deleted'
+              : 'credential-changed';
+          redirect(reason);
+        });
+      })
+      .catch(function () {});
+  }, 1000);
+  window.addEventListener('pagehide', function () { window.clearInterval(poll); });
 })();
 </script>`;
 
@@ -591,7 +617,7 @@ export function createGatewayServer(
   const upstreamAgent = new http.Agent({ keepAlive: true, maxSockets: 64, keepAliveMsecs: 30_000 });
 
   const ensureWorkspace = hooks.ensureWorkspace ?? ((root: string) =>
-    new Promise<void>((resolve, reject) => {
+    new Promise<boolean>((resolve, reject) => {
       const payload = JSON.stringify({
         type: 'client-request',
         rpcId: randomBytes(12).toString('hex'),
@@ -616,13 +642,13 @@ export function createGatewayServer(
         response.on('end', () => {
           try {
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
-              result?: { ok?: boolean; error?: { message?: string } };
+              result?: { ok?: boolean; value?: { created?: boolean }; error?: { message?: string } };
             };
             if (response.statusCode !== 200 || body.result?.ok !== true) {
               reject(new Error(body.result?.error?.message ?? `workspace.create HTTP ${response.statusCode ?? 0}`));
               return;
             }
-            resolve();
+            resolve(body.result?.value?.created === true);
           } catch (error) {
             reject(error);
           }
@@ -631,6 +657,75 @@ export function createGatewayServer(
       request.on('error', reject);
       request.end(payload);
     }));
+
+  const removeWorkspace = hooks.removeWorkspace ?? (async (root: string): Promise<void> => {
+    const payload = JSON.stringify({
+      type: 'client-request',
+      rpcId: randomBytes(12).toString('hex'),
+      method: 'workspace.list',
+      payload: {},
+    });
+    const workspaceId = await new Promise<string | null>((resolve, reject) => {
+      const request = http.request({
+        hostname: upstreamHost,
+        port: upstreamPort,
+        path: '/api/workspace.list',
+        method: 'POST',
+        headers: {
+          host: `${upstreamHost}:${upstreamPort}`,
+          origin: `http://${upstreamHost}:${upstreamPort}`,
+          'content-type': 'application/json',
+          'content-length': String(Buffer.byteLength(payload)),
+        },
+        agent: upstreamAgent,
+      }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => {
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            const paths = new Map<string, string>();
+            collectIdPathPairs(body, paths);
+            resolve([...paths.entries()].find(([, candidate]) => candidate === root)?.[0] ?? null);
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+      request.on('error', reject);
+      request.end(payload);
+    });
+    if (workspaceId === null) return;
+    const deletePayload = JSON.stringify({
+      type: 'client-request',
+      rpcId: randomBytes(12).toString('hex'),
+      method: 'workspace.delete',
+      payload: { workspaceId },
+    });
+    await new Promise<void>((resolve, reject) => {
+      const request = http.request({
+        hostname: upstreamHost,
+        port: upstreamPort,
+        path: '/api/workspace.delete',
+        method: 'POST',
+        headers: {
+          host: `${upstreamHost}:${upstreamPort}`,
+          origin: `http://${upstreamHost}:${upstreamPort}`,
+          'content-type': 'application/json',
+          'content-length': String(Buffer.byteLength(deletePayload)),
+        },
+        agent: upstreamAgent,
+      }, (response) => {
+        response.resume();
+        response.on('end', () => {
+          if (response.statusCode !== 200) reject(new Error(`workspace.delete HTTP ${response.statusCode ?? 0}`));
+          else resolve();
+        });
+      });
+      request.on('error', reject);
+      request.end(deletePayload);
+    });
+  });
 
   function collectWorkspaceSessionCounts(value: unknown, out: Map<string, number>): void {
     if (Array.isArray(value)) {
@@ -800,6 +895,35 @@ export function createGatewayServer(
     return authorizeFilesystemPath(perms.workspace_root, candidate, { allowMissing: true }).allowed;
   }
 
+  /** Filter path-bearing response metadata through the same realpath boundary as requests. */
+  function filterByAuthorizedPathField(value: unknown, perms: UserPermissionsRow, field: string): unknown {
+    const pathFields = new Set([field, 'cwd', 'path', 'parent', 'root']);
+    if (Array.isArray(value)) {
+      return value.flatMap((item) => {
+        if (item !== null && typeof item === 'object') {
+          const candidate = (item as Record<string, unknown>)[field];
+          if (typeof candidate === 'string' && candidate !== '' && !permissionPathAllowed(perms, candidate)) return [];
+        }
+        const filtered = filterByAuthorizedPathField(item, perms, field);
+        return filtered === undefined ? [] : [filtered];
+      });
+    }
+    if (value !== null && typeof value === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        if (
+          pathFields.has(key) &&
+          typeof nested === 'string' &&
+          nested !== '' &&
+          !permissionPathAllowed(perms, nested)
+        ) continue;
+        out[key] = filterByAuthorizedPathField(nested, perms, field);
+      }
+      return out;
+    }
+    return value;
+  }
+
   const HOST_FILESYSTEM_ENDPOINT_RE = /^\/api\/host[.\/](listDirectory|createDirectory|openPath)$/;
   const HOST_LIST_DIRECTORY_RE = /^\/api\/host[.\/]listDirectory$/;
   const HOST_CREATE_DIRECTORY_RE = /^\/api\/host[.\/]createDirectory$/;
@@ -807,6 +931,8 @@ export function createGatewayServer(
   const WORKSPACE_DELETE_RE = /^\/api\/workspace[.\/]delete$/;
   const SESSION_CREATE_RE = /^\/api\/session[.\/]create$/;
   const SESSION_FORK_RE = /^\/api\/session[.\/]fork$/;
+  const SESSION_SEARCH_RE = /^\/api\/session[.\/]search$/;
+  const SESSION_SCOPED_RE = /^\/api\/session[.\/](?:prompt|history|rename|attachment|updateQueue|cancel)$/;
 
   function injectRpcPayloadPath(value: unknown, workspaceRoot: string): unknown {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
@@ -824,6 +950,14 @@ export function createGatewayServer(
       return { ...obj, payload: { ...(obj.payload as Record<string, unknown>), workspaceId } };
     }
     return { ...obj, workspaceId };
+  }
+
+  function requestPathFromQuery(url: URL): string | null {
+    for (const field of ['path', 'root', 'cwd', 'directory', 'workspace', 'target', 'targetPath']) {
+      const value = url.searchParams.get(field);
+      if (value !== null && value.length > 0) return value;
+    }
+    return null;
   }
 
   function sendRpcDenied(res: Response, body: unknown, code: string, message: string): void {
@@ -883,6 +1017,36 @@ export function createGatewayServer(
 
   // ── 长连接与留言 / 聊天（SSE 广播） ───────────────────────
   const activeConnections = new UserConnectionRegistry();
+  const CONNECTION_REVALIDATION_MS = 250;
+
+  function connectionRevocationReason(userId: number, credentialVersion: number): string | null {
+    const row = db.getUserById(userId);
+    if (row === null) return 'account-deleted';
+    if (row.role !== 'admin' && effectivePermissions(userId).banned) return 'account-banned';
+    if (row.credential_version !== credentialVersion) return 'credential-changed';
+    return null;
+  }
+
+  /**
+   * Long connections may be owned by a different gateway process than the
+   * one that changed the shared SQLite account state. Poll the same live
+   * account fields used by request authentication so those connections are
+   * revoked without requiring an in-process notification bus.
+   */
+  function watchConnection(userId: number, credentialVersion: number): () => void {
+    let stopped = false;
+    const timer = setInterval(() => {
+      if (stopped) return;
+      const reason = connectionRevocationReason(userId, credentialVersion);
+      if (reason !== null) activeConnections.revoke(userId, reason);
+    }, CONNECTION_REVALIDATION_MS);
+    timer.unref();
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }
+
   const chatClients = new Set<Response>();
   function broadcastMessage(msg: MessageRow): void {
     const payload = `data: ${JSON.stringify(msg)}\n\n`;
@@ -1032,6 +1196,18 @@ export function createGatewayServer(
   // 仅限本机 dsh 插件调用（恒定时间比对内部密钥；密钥由 SETUP_KEY 派生，
   // 泄漏面与安装密钥一致）。响应立即返回，补丁应用与 dsh 重启异步进行，
   // 让设置页的响应先刷给浏览器。补丁强制启用，无开关。
+  app.get('/gateway/internal/health', (req, res) => {
+    const secret = typeof req.headers['x-internal-secret'] === 'string' ? req.headers['x-internal-secret'] : '';
+    const expected = config.internalSecret;
+    const a = Buffer.from(secret);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      res.status(403).json({ ok: false, error: 'forbidden' });
+      return;
+    }
+    res.status(200).json({ ok: true, service: 'dsh-access-gateway' });
+  });
+
   app.post('/gateway/internal/patch', express.json({ limit: '4kb' }), (req, res) => {
     const secret = typeof req.headers['x-internal-secret'] === 'string' ? req.headers['x-internal-secret'] : '';
     const expected = config.internalSecret;
@@ -1056,6 +1232,25 @@ export function createGatewayServer(
     }, 500);
   });
 
+  app.post('/gateway/internal/revoke-user', express.json({ limit: '4kb' }), (req, res) => {
+    const secret = typeof req.headers['x-internal-secret'] === 'string' ? req.headers['x-internal-secret'] : '';
+    const expected = config.internalSecret;
+    const a = Buffer.from(secret);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      res.status(403).json({ ok: false, error: 'forbidden' });
+      return;
+    }
+    const userId = Number(req.body?.userId);
+    const reason = req.body?.reason;
+    if (!Number.isInteger(userId) || userId <= 0 || !['account-banned', 'account-deleted', 'credential-changed'].includes(reason)) {
+      res.status(400).json({ ok: false, error: 'invalid revocation' });
+      return;
+    }
+    const closed = activeConnections.revoke(userId, reason);
+    res.status(200).json({ ok: true, closed });
+  });
+
   // ── 内部辅助：API 路由的输入清洗 ───────────────────────────
   const nullableInt = (v: unknown): number | null => {
     const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
@@ -1071,7 +1266,26 @@ export function createGatewayServer(
       res.status(403).json({ ok: false, code: 'FORBIDDEN_CSRF', error: 'forbidden' });
       return null;
     }
-    const user = authedUser(req);
+    const token = readCookie(req.headers.cookie, COOKIE_NAME);
+    let user: { userId: number; username: string; role: 'admin' | 'user' } | null = null;
+    try {
+      user = token === null ? null : auth.verifyToken(token);
+    } catch (error) {
+      if (error instanceof AuthError && error.code === 'ACCOUNT_BANNED') {
+        res.status(403).json({ ok: false, code: 'ACCOUNT_BANNED', error: '账号已停用' });
+        return null;
+      }
+      let code = 'NOT_AUTHENTICATED';
+      if (token !== null) {
+        const payload = jwt.decode(token) as { sub?: string; username?: string; cv?: number } | null;
+        const userId = Number(payload?.sub);
+        const row = Number.isInteger(userId) && userId > 0 ? db.getUserById(userId) : null;
+        if (row === null && Number.isInteger(userId) && userId > 0) code = 'ACCOUNT_DELETED';
+        else if (row !== null && (row.credential_version !== payload?.cv || row.username !== payload?.username)) code = 'CREDENTIAL_CHANGED';
+      }
+      res.status(401).json({ ok: false, code, error: code === 'ACCOUNT_DELETED' ? '账号已删除' : code === 'CREDENTIAL_CHANGED' ? '管理员凭据已变更' : '未登录或会话已失效' });
+      return null;
+    }
     if (!user) {
       res.status(401).json({ ok: false, code: 'NOT_AUTHENTICATED', error: '未登录或会话已失效' });
       return null;
@@ -1164,6 +1378,9 @@ export function createGatewayServer(
       res.status(400).json({ ok: false, code: 'INVALID_WORKSPACE_MODE', error: '必须选择工作区分配方式' });
       return;
     }
+    let workspaceCreated = false;
+    let created: { id: number; username: string } | null = null;
+    let assignedRoot: string | null = null;
     try {
       const assignment = assignWorkspace({
         mode: workspaceMode,
@@ -1171,38 +1388,42 @@ export function createGatewayServer(
         baseRoot: config.workspaceRoot,
         specifiedRoot: typeof body.workspaceRoot === 'string' ? body.workspaceRoot : null,
       });
-      await ensureWorkspace(assignment.root);
-      const created = await auth.addSubUser(me, username, password, {
+      assignedRoot = assignment.root;
+      workspaceCreated = (await ensureWorkspace(assignment.root)) === true;
+      created = await auth.addSubUser(me, username, password, {
         ip: req.ip,
         userAgent: req.headers['user-agent'],
       });
-      try {
-        db.setPermissions(created.id, {
-          allowedFolders: [assignment.root],
-          hourlyTokenLimit: nullableInt(body.hourlyTokenLimit),
-          dailyMinutesLimit: nullableInt(body.dailyMinutesLimit),
-          allowUpload: body.allowUpload === true,
-          allowGitDownload: body.allowGitDownload === true,
-          banned: false,
-          sandboxMode:
-            body.sandboxMode === 'read-only' ||
-            body.sandboxMode === 'workspace-write' ||
-            body.sandboxMode === 'danger-full-access'
-              ? body.sandboxMode
-              : 'workspace-write',
-          workspaceMode: assignment.mode,
-          workspaceRoot: assignment.root,
-          remark: typeof body.remark === 'string' ? body.remark.trim().slice(0, 500) : '',
-        });
-      } catch (error) {
-        db.deleteUser(created.id);
-        throw error;
-      }
+      db.setPermissions(created.id, {
+        allowedFolders: [assignment.root],
+        hourlyTokenLimit: nullableInt(body.hourlyTokenLimit),
+        dailyMinutesLimit: nullableInt(body.dailyMinutesLimit),
+        allowUpload: body.allowUpload === true,
+        allowGitDownload: body.allowGitDownload === true,
+        banned: false,
+        sandboxMode:
+          body.sandboxMode === 'read-only' ||
+          body.sandboxMode === 'workspace-write' ||
+          body.sandboxMode === 'danger-full-access'
+            ? body.sandboxMode
+            : 'workspace-write',
+        workspaceMode: assignment.mode,
+        workspaceRoot: assignment.root,
+        remark: typeof body.remark === 'string' ? body.remark.trim().slice(0, 500) : '',
+      });
       res.status(201).json({
         ok: true,
         user: { id: created.id, username: created.username, workspaceMode: assignment.mode, workspaceRoot: assignment.root },
       });
     } catch (error) {
+      if (created !== null) {
+        try { db.deleteUser(created.id); } catch { /* 保留原始失败，避免补偿掩盖原因 */ }
+      }
+      if (workspaceCreated && assignedRoot !== null) {
+        await removeWorkspace(assignedRoot).catch((cleanupError) => {
+          console.error('[dsh-access] Workspace compensation failed; manual repair may be required:', cleanupError);
+        });
+      }
       if (error instanceof AuthError) {
         res.status(error.status).json({ ok: false, code: error.code, error: error.localize(langOf(req)) });
         return;
@@ -1312,6 +1533,10 @@ export function createGatewayServer(
     }
     try {
       const requestedFolders = stringArray(body.allowedFolders);
+      if (requestedFolders.length > 1) {
+        res.status(400).json({ ok: false, code: 'MULTIPLE_WORKSPACES', error: '只能分配一个工作区域' });
+        return;
+      }
       const specifiedRoot =
         typeof body.workspaceRoot === 'string'
           ? body.workspaceRoot
@@ -1324,7 +1549,7 @@ export function createGatewayServer(
         baseRoot: config.workspaceRoot,
         specifiedRoot,
       });
-      await ensureWorkspace(assignment.root);
+      const workspaceCreated = (await ensureWorkspace(assignment.root)) === true;
       const hourlyTokenLimit = nullableInt(body.hourlyTokenLimit);
       const dailyMinutesLimit = nullableInt(body.dailyMinutesLimit);
       const allowUpload = body.allowUpload !== false;
@@ -1336,18 +1561,56 @@ export function createGatewayServer(
           ? rawSandbox
           : previous.sandbox_mode ?? 'read-only';
       const remark = typeof body.remark === 'string' ? body.remark.trim().slice(0, 500) : previous.remark;
-      db.setPermissions(userId, {
-        allowedFolders: [assignment.root],
-        hourlyTokenLimit,
-        dailyMinutesLimit,
-        allowUpload,
-        allowGitDownload,
-        banned,
-        sandboxMode,
-        workspaceMode: assignment.mode,
-        workspaceRoot: assignment.root,
-        remark,
-      });
+      try {
+        db.setPermissions(userId, {
+          allowedFolders: [assignment.root],
+          hourlyTokenLimit,
+          dailyMinutesLimit,
+          allowUpload,
+          allowGitDownload,
+          banned,
+          sandboxMode,
+          workspaceMode: assignment.mode,
+          workspaceRoot: assignment.root,
+          remark,
+        });
+      } catch (error) {
+        try {
+          db.setPermissions(userId, {
+            allowedFolders: previous.allowed_folders,
+            hourlyTokenLimit: previous.hourly_token_limit,
+            dailyMinutesLimit: previous.daily_minutes_limit,
+            allowUpload: previous.allow_upload,
+            allowGitDownload: previous.allow_git_download,
+            banned: previous.banned,
+            sandboxMode: previous.sandbox_mode,
+            workspaceMode: previous.workspace_mode,
+            workspaceRoot: previous.workspace_root,
+            remark: previous.remark,
+          });
+        } catch {
+          try {
+            db.setPermissions(userId, {
+              allowedFolders: [],
+              hourlyTokenLimit: previous.hourly_token_limit,
+              dailyMinutesLimit: previous.daily_minutes_limit,
+              allowUpload: previous.allow_upload,
+              allowGitDownload: previous.allow_git_download,
+              banned: previous.banned,
+              sandboxMode: previous.sandbox_mode,
+              workspaceMode: 'repair-required',
+              workspaceRoot: null,
+              remark: previous.remark,
+            });
+          } catch { /* 数据库不可写时保留原始错误 */ }
+        }
+        if (workspaceCreated && assignment.root !== previous.workspace_root) {
+          await removeWorkspace(assignment.root).catch((cleanupError) => {
+            console.error('[dsh-access] Workspace compensation failed; manual repair may be required:', cleanupError);
+          });
+        }
+        throw error;
+      }
       db.audit('permissions_changed', {
         username: target.username,
         detail: JSON.stringify({
@@ -1421,6 +1684,14 @@ export function createGatewayServer(
   app.get('/gateway/api/messages/stream', (req, res) => {
     const me = apiAuth(req, res);
     if (!me) return;
+    const token = readCookie(req.headers.cookie, COOKIE_NAME);
+    let credentialVersion = 0;
+    try {
+      credentialVersion = token === null ? 0 : auth.verifyToken(token).cv;
+    } catch {
+      res.status(401).end();
+      return;
+    }
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -1428,7 +1699,9 @@ export function createGatewayServer(
     res.flushHeaders();
     res.write(`data: ${JSON.stringify({ type: 'init', me: { id: me.userId, username: me.username, role: me.role } })}\n\n`);
     chatClients.add(res);
+    const stopWatch = watchConnection(me.userId, credentialVersion);
     const untrack = activeConnections.track(me.userId, (reason) => {
+      stopWatch();
       try {
         res.write(`event: account-revoked\ndata: ${JSON.stringify({ reason })}\n\n`);
       } finally {
@@ -1436,6 +1709,7 @@ export function createGatewayServer(
       }
     });
     req.on('close', () => {
+      stopWatch();
       chatClients.delete(res);
       untrack();
     });
@@ -1659,7 +1933,7 @@ export function createGatewayServer(
               const restricted =
                 reqAs.dshAccessPerms !== undefined;
               const outBody = restricted
-                ? filterByPathField(parsed, reqAs.dshAccessPerms!.allowed_folders, 'path')
+                ? filterByAuthorizedPathField(parsed, reqAs.dshAccessPerms!, 'path')
                 : parsed;
               const out = Buffer.from(JSON.stringify(outBody), 'utf8');
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
@@ -1694,7 +1968,39 @@ export function createGatewayServer(
               const parsed = JSON.parse(body.toString('utf8'));
               sessionPathById.clear();
               collectSessionPathPairs(parsed, sessionPathById);
-              const filtered = filterByPathField(parsed, reqAs.dshAccessPerms!.allowed_folders, 'cwd');
+              const filtered = filterByAuthorizedPathField(parsed, reqAs.dshAccessPerms!, 'cwd');
+              const out = Buffer.from(JSON.stringify(filtered), 'utf8');
+              const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
+              delete respHeaders['content-length'];
+              delete respHeaders['content-encoding'];
+              const encoded = compressResponseBody(req, respHeaders, out);
+              res.writeHead(upstreamRes.statusCode ?? 200, encoded.headers);
+              res.end(encoded.body);
+            } catch {
+              const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
+              res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
+              res.end(Buffer.concat(chunks));
+            }
+          });
+          upstreamRes.on('error', () => res.destroy());
+          return;
+        }
+
+        // ── session.search 响应过滤：搜索结果也不能泄露区域外会话 ──
+        if (
+          reqAs.dshAccessPerms !== undefined &&
+          req.method === 'POST' &&
+          SESSION_SEARCH_RE.test(parsedUrl.pathname)
+        ) {
+          const chunks: Buffer[] = [];
+          upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          upstreamRes.on('end', () => {
+            try {
+              let body: Buffer<ArrayBufferLike> = Buffer.concat(chunks);
+              const enc = String(upstreamRes.headers['content-encoding'] ?? '');
+              body = decodeResponseBody(body, enc);
+              const parsed = JSON.parse(body.toString('utf8'));
+              const filtered = filterByAuthorizedPathField(parsed, reqAs.dshAccessPerms!, 'cwd');
               const out = Buffer.from(JSON.stringify(filtered), 'utf8');
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               delete respHeaders['content-length'];
@@ -1765,7 +2071,13 @@ export function createGatewayServer(
       (req.method === 'POST' || req.method === 'PUT') &&
       (WORKSPACE_ENDPOINT_RE.test(parsedUrl.pathname) ||
         HOST_FILESYSTEM_ENDPOINT_RE.test(parsedUrl.pathname) ||
-        isAionuiPanel(parsedUrl.pathname));
+        isAionuiPanel(parsedUrl.pathname) ||
+        SESSION_SCOPED_RE.test(parsedUrl.pathname));
+    const needsTransferCheck =
+      reqAs.dshAccessPerms !== undefined &&
+      (((req.method === 'POST' || req.method === 'PUT') &&
+        (isUploadRequest(req.method, parsedUrl.pathname) || isGitRequest(parsedUrl.pathname))) ||
+        ((req.method === 'GET' || req.method === 'HEAD') && isGitRequest(parsedUrl.pathname)));
     const needsSandboxCheck =
       reqAs.dshAccessPerms !== undefined &&
       reqAs.dshAccessPerms.sandbox_mode !== null &&
@@ -1788,7 +2100,7 @@ export function createGatewayServer(
       (req.method === 'POST' || req.method === 'PUT') &&
       /^\/api\/respond$/.test(parsedUrl.pathname);
 
-    if (needsFolderCheck || needsSandboxCheck || needsCommandCheck || needsApprovalCheck) {
+    if (needsFolderCheck || needsTransferCheck || needsSandboxCheck || needsCommandCheck || needsApprovalCheck) {
       const chunks: Buffer[] = [];
       let size = 0;
       let settled = false;
@@ -1816,6 +2128,25 @@ export function createGatewayServer(
           bodyObj = null;
         }
 
+        if (needsTransferCheck) {
+          let transferPath = extractPathFromBody(bodyObj) ?? requestPathFromQuery(parsedUrl);
+          if (transferPath === null && /^\/api\/session[.\/]export/.test(parsedUrl.pathname)) {
+            const sessionId = findStringField(bodyObj, 'sessionId') ?? parsedUrl.searchParams.get('sessionId');
+            if (sessionId !== null) {
+              transferPath = sessionPathById.get(sessionId) ?? null;
+              if (transferPath === null) {
+                await refreshSessionPathMap().catch(() => undefined);
+                transferPath = sessionPathById.get(sessionId) ?? null;
+              }
+            }
+          }
+          if (transferPath === null || !permissionPathAllowed(reqAs.dshAccessPerms!, transferPath)) {
+            upstreamReq.destroy();
+            res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.folderDenied')));
+            return;
+          }
+        }
+
         if (needsFolderCheck) {
           let targetPath: string | null = null;
           if (bodyObj !== null) {
@@ -1833,6 +2164,13 @@ export function createGatewayServer(
                 targetPath = reqAs.dshAccessPerms!.workspace_root;
                 bodyObj = injectRpcPayloadPath(bodyObj, targetPath);
                 bodyRewritten = true;
+              }
+            } else if (SESSION_SCOPED_RE.test(parsedUrl.pathname)) {
+              const sessionId = findStringField(bodyObj, 'sessionId');
+              targetPath = sessionId === null ? null : sessionPathById.get(sessionId) ?? null;
+              if (targetPath === null && sessionId !== null) {
+                await refreshSessionPathMap().catch(() => undefined);
+                targetPath = sessionPathById.get(sessionId) ?? null;
               }
             } else if (HOST_CREATE_DIRECTORY_RE.test(parsedUrl.pathname)) {
               const parentPath = extractPathFromBody(bodyObj);
@@ -1997,7 +2335,7 @@ export function createGatewayServer(
     }
     // 认证检查（复用 Cookie）
     const token = readCookie(req.headers.cookie, COOKIE_NAME);
-    let user: { userId: number; username: string; role: 'admin' | 'user' } | null = null;
+    let user: { userId: number; username: string; role: 'admin' | 'user'; cv: number } | null = null;
     if (token) {
       try {
         user = auth.verifyToken(token);
@@ -2013,7 +2351,9 @@ export function createGatewayServer(
 
     // 转发升级请求（Host/Origin 改写，同 HTTP 路径；路径已规范化）
     let upstreamSocket: net.Socket | null = null;
+    const stopWatch = watchConnection(user.userId, user.cv);
     const untrack = activeConnections.track(user.userId, () => {
+      stopWatch();
       socket.destroy();
       upstreamSocket?.destroy();
     });
@@ -2039,8 +2379,8 @@ export function createGatewayServer(
     upstreamSocket = connectedSocket;
     connectedSocket.on('error', () => socket.destroy());
     socket.on('error', () => upstreamSocket?.destroy());
-    socket.on('close', () => { untrack(); upstreamSocket?.destroy(); });
-    connectedSocket.on('close', () => { untrack(); socket.destroy(); });
+    socket.on('close', () => { stopWatch(); untrack(); upstreamSocket?.destroy(); });
+    connectedSocket.on('close', () => { stopWatch(); untrack(); socket.destroy(); });
   });
 
   return server;

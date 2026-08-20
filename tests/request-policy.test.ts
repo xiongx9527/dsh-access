@@ -62,6 +62,15 @@ test('subusers cannot mutate the global workspace registry or agent preset catal
   }
 });
 
+test('subusers cannot read admin-only plugin endpoints', async () => {
+  const { classifyGatewayRequest } = await policy();
+  for (const pathname of ['/api/dsh-ssh', '/api/dsh-uploads', '/api/skin-center', '/modlens']) {
+    assert.deepEqual(classifyGatewayRequest('GET', pathname, 'user'), {
+      allowed: false, reason: 'global-mutation',
+    });
+  }
+});
+
 
 test('subusers cannot open an unrestricted native directory picker', async () => {
   const { classifyGatewayRequest } = await policy();

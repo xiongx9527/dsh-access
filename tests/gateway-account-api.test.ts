@@ -113,6 +113,54 @@ test('banning an account is observed by the very next request even after a succe
   assert.ok(after.status === 401 || after.status === 403);
 });
 
+test('a second gateway process closes an existing SSE when the shared account is banned', async (t) => {
+  const fixture = await startFixture();
+  t.after(fixture.close);
+  const secondGateway = createGatewayServer(fixture.config, fixture.auth, fixture.db);
+  await new Promise<void>((resolve) => secondGateway.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise<void>((resolve, reject) => {
+    secondGateway.close((error) => (error ? reject(error) : resolve()));
+  }));
+  const address = secondGateway.address() as AddressInfo;
+  const guestToken = (await fixture.auth.login({ username: 'guest', password: USER_PASSWORD })).token;
+
+  const abort = new AbortController();
+  try {
+    const stream = await fetch(`http://127.0.0.1:${address.port}/gateway/api/messages/stream`, {
+      headers: { cookie: cookie(guestToken) },
+      signal: abort.signal,
+    });
+    assert.equal(stream.status, 200);
+    const reader = stream.body!.getReader();
+    const initial = await reader.read();
+    assert.match(new TextDecoder().decode(initial.value), /"type":"init"/);
+
+    const current = fixture.db.getPermissions(fixture.guest.id)!;
+    fixture.db.setPermissions(fixture.guest.id, {
+      allowedFolders: current.allowed_folders,
+      hourlyTokenLimit: current.hourly_token_limit,
+      dailyMinutesLimit: current.daily_minutes_limit,
+      allowUpload: current.allow_upload,
+      allowGitDownload: current.allow_git_download,
+      banned: true,
+      sandboxMode: current.sandbox_mode,
+      workspaceMode: current.workspace_mode,
+      workspaceRoot: current.workspace_root,
+      remark: current.remark,
+    });
+
+    const next = await Promise.race([
+      reader.read(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('cross-process SSE was not revoked')), 1500)),
+    ]);
+    const text = new TextDecoder().decode(next.value);
+    assert.match(text, /account-revoked/);
+    assert.match(text, /account-banned/);
+  } finally {
+    abort.abort();
+  }
+});
+
 test('admin overview includes account remark while the subuser current-account response never exposes it', async (t) => {
   const fixture = await startFixture();
   t.after(fixture.close);

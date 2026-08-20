@@ -29,6 +29,18 @@ const GLOBAL_MUTATIONS = new Set([
   'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
 ]);
 
+function isAdminOnlyPluginEndpoint(method: string, pathname: string): boolean {
+  return (
+    pathname === '/api/dsh-ssh' ||
+    pathname.startsWith('/api/dsh-ssh/') ||
+    pathname === '/api/skin-center' ||
+    pathname.startsWith('/api/skin-center/') ||
+    pathname === '/modlens' ||
+    pathname.startsWith('/modlens/') ||
+    (pathname === '/api/dsh-uploads' && (method === 'GET' || method === 'DELETE'))
+  );
+}
+
 export function classifyGatewayRequest(
   method: string,
   pathname: string,
@@ -36,6 +48,7 @@ export function classifyGatewayRequest(
 ): GatewayRequestDecision {
   if (role === 'admin') return { allowed: true };
   const upperMethod = method.toUpperCase();
+  if (isAdminOnlyPluginEndpoint(upperMethod, pathname)) return { allowed: false, reason: 'global-mutation' };
   if (upperMethod === 'GET' || upperMethod === 'HEAD' || upperMethod === 'OPTIONS') return { allowed: true };
   if (!pathname.startsWith('/api/')) return { allowed: false, reason: 'unknown-mutation' };
 

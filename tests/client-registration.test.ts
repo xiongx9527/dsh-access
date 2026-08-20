@@ -176,10 +176,10 @@ test('legacy settings card exposes an admin-only configurable gateway port', () 
   const cardSource = readFileSync(new URL('../src/client/card.tsx', import.meta.url), 'utf8');
   const pluginSource = readFileSync(new URL('../src/plugin.ts', import.meta.url), 'utf8');
   assert.match(cardSource, /api<GatewayConfig>\('\/api\/dsh-access\/gateway\/config'\)/);
-  assert.match(cardSource, /api(?:<GatewayConfig>)?\('\/api\/dsh-access\/gateway\/config', \{ port:/);
+  assert.match(cardSource, /api(?:<GatewayConfig>)?\('\/api\/dsh-access\/gateway\/config', \{ port: gatewayPortDraft, host: gatewayHostDraft/);
   assert.match(cardSource, /t\('gatewayPort'\)/);
   assert.match(cardSource, /t\('saveGatewayPort'\)/);
   assert.match(pluginSource, /path: '\/api\/dsh-access\/gateway\/config'/);
   assert.match(pluginSource, /caller\.role !== 'admin'/);
-  assert.match(pluginSource, /restartGatewayAndRefreshRemote\(gatewayRuntime, remoteAccess, port\)/);
+  assert.match(pluginSource, /restartGatewayAndRefreshRemote\(gatewayRuntime, remoteAccess, port, host\)/);
 });

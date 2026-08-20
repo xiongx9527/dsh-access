@@ -4,10 +4,34 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
+  parseGatewayHost,
   parseGatewayPort,
   replaceEnvSetting,
+  writeGatewayConfig,
   writeGatewayPort,
 } from '../src/gateway-settings.js';
+
+test('gateway host accepts loopback, all-interfaces and verified local addresses', () => {
+  assert.equal(parseGatewayHost('127.0.0.1', ['192.168.1.10']), '127.0.0.1');
+  assert.equal(parseGatewayHost('0.0.0.0', ['192.168.1.10']), '0.0.0.0');
+  assert.equal(parseGatewayHost('192.168.1.10', ['192.168.1.10']), '192.168.1.10');
+  assert.throws(() => parseGatewayHost('192.168.1.11', ['192.168.1.10']), /local/i);
+  assert.throws(() => parseGatewayHost('example.com', ['192.168.1.10']), /IP|host/i);
+});
+
+test('gateway host and port are persisted atomically without changing other env values', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'dsh-access-gateway-config-'));
+  const envPath = path.join(root, '.env');
+  try {
+    writeFileSync(envPath, 'SETUP_KEY=secret\nMCP_GATEWAY_PORT=3088\nMCP_GATEWAY_HOST=0.0.0.0\n', 'utf8');
+    const previous = writeGatewayConfig(envPath, { port: 3090, host: '192.168.1.10' });
+    assert.match(previous, /MCP_GATEWAY_PORT=3088/);
+    assert.match(previous, /MCP_GATEWAY_HOST=0\.0\.0\.0/);
+    assert.equal(readFileSync(envPath, 'utf8'), 'SETUP_KEY=secret\nMCP_GATEWAY_PORT=3090\nMCP_GATEWAY_HOST=192.168.1.10\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('gateway port accepts a free non-upstream TCP port', () => {
   assert.equal(parseGatewayPort(3088, 3080), 3088);

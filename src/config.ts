@@ -6,6 +6,8 @@ import { config as loadEnv } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { networkInterfaces } from 'node:os';
+import { parseGatewayHost } from './gateway-settings.js';
 import path from 'node:path';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -110,11 +112,17 @@ export function loadConfig(): PlatformConfig {
 
   const gatewayPortRaw = readEnv('MCP_GATEWAY_PORT', '3088').trim();
   const gatewayPortNum = Number(gatewayPortRaw);
-  // 端口非法（非数字/越界）回退默认 8080，避免 listen(NaN) 的泛化报错
+  // 端口非法（非数字/越界）回退默认 3088，避免 listen(NaN) 的泛化报错
   const gatewayPort =
     gatewayPortRaw !== '' && Number.isInteger(gatewayPortNum) && gatewayPortNum > 0 && gatewayPortNum <= 65535
       ? gatewayPortNum
-      : 8080;
+      : 3088;
+  const gatewayHost = parseGatewayHost(
+    readEnv('MCP_GATEWAY_HOST', '0.0.0.0'),
+    Object.values(networkInterfaces()).flatMap((entries) =>
+      (entries ?? []).filter((entry) => !entry.internal).map((entry) => entry.address),
+    ),
+  );
 
   return {
     setupKey,
@@ -122,7 +130,7 @@ export function loadConfig(): PlatformConfig {
     dbEncKey: readEnv('MCP_DB_ENC_KEY', ''),
     workspaceRoot: readEnv('MCP_WORKSPACE_ROOT', path.join(path.dirname(dbPath), 'workspaces')),
     gateway: {
-      host: readEnv('MCP_GATEWAY_HOST', '0.0.0.0'),
+      host: gatewayHost,
       port: gatewayPort,
       upstream: readEnv('MCP_GATEWAY_UPSTREAM', 'http://127.0.0.1:3080'),
       tls: userCerts

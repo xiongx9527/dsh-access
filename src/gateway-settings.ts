@@ -1,4 +1,14 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { isIP } from 'node:net';
+
+export function parseGatewayHost(value: unknown, localAddresses: readonly string[] = []): string {
+  if (typeof value !== 'string') throw new Error('gateway host must be an IP address');
+  const host = value.trim();
+  if (host === '127.0.0.1' || host === '0.0.0.0') return host;
+  if (isIP(host) === 0) throw new Error('gateway host must be an IP address');
+  if (!localAddresses.includes(host)) throw new Error('gateway host must be a local address');
+  return host;
+}
 
 export function parseGatewayPort(value: unknown, upstreamPort: number | null): number {
   const raw = typeof value === 'string' ? value.trim() : value;
@@ -38,5 +48,16 @@ export function writeEnvFileAtomic(envPath: string, content: string): void {
 export function writeGatewayPort(envPath: string, port: number): string {
   const previous = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
   writeEnvFileAtomic(envPath, replaceEnvSetting(previous, 'MCP_GATEWAY_PORT', String(port)));
+  return previous;
+}
+
+export function writeGatewayConfig(envPath: string, config: { port: number; host: string }): string {
+  const previous = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
+  const next = replaceEnvSetting(
+    replaceEnvSetting(previous, 'MCP_GATEWAY_PORT', String(config.port)),
+    'MCP_GATEWAY_HOST',
+    config.host,
+  );
+  writeEnvFileAtomic(envPath, next);
   return previous;
 }

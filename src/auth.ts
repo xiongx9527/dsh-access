@@ -359,7 +359,7 @@ export class AuthService {
   ): Promise<void> {
     const targetUser = await this.db.getUserByUsername(target.trim());
     if (!targetUser) throw new AuthError('NO_SUCH_USER', {}, 404);
-    if (caller.role !== 'admin' && caller.username !== targetUser.username) {
+    if (caller.role !== 'admin') {
       throw new AuthError('FORBIDDEN_USERNAME', {}, 403);
     }
     const username = assertUsername(newUsername);

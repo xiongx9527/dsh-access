@@ -62,6 +62,18 @@ test('deleting an account invalidates its previously issued token immediately', 
   );
 });
 
+test('subusers cannot rename themselves through the auth service', async () => {
+  const { auth } = createAuthFixture();
+  await auth.setup({ setupKey: 'test-setup-key', username: 'admin', password: ADMIN_PASSWORD });
+  const admin = (await auth.login({ username: 'admin', password: ADMIN_PASSWORD })).token;
+  const adminUser = auth.verifyToken(admin);
+  await auth.addSubUser({ userId: adminUser.userId, username: adminUser.username, role: 'admin' }, 'guest', USER_PASSWORD);
+  await assert.rejects(
+    auth.renameUser({ userId: 2, username: 'guest', role: 'user' }, 'guest', 'renamed'),
+    (error: unknown) => error instanceof Error && /用户名|username|forbidden/i.test(error.message),
+  );
+});
+
 test('changing a password invalidates the old token immediately', async () => {
   const { auth, guest } = await createUsers();
   const { token } = await auth.login({ username: 'guest', password: USER_PASSWORD });

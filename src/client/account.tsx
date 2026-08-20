@@ -394,12 +394,38 @@ export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshaccess'>)
 
   useEffect(() => {
     const stream = typeof EventSource === 'undefined' ? null : new EventSource('/gateway/api/messages/stream');
-    const revoke = (event: MessageEvent<{ reason?: string }>) => {
-      const reason = event.data?.reason === 'account-banned' ? 'banned' : event.data?.reason === 'account-deleted' ? 'deleted' : 'credential-changed';
+    let redirected = false;
+    const redirect = (reason: 'banned' | 'deleted' | 'credential-changed') => {
+      if (redirected) return;
+      redirected = true;
+      stream?.close();
       window.location.assign(`/gateway/login?reason=${reason}`);
     };
+    const revoke = (event: MessageEvent<{ reason?: string } | string>) => {
+      let payload: { reason?: string } = {};
+      try {
+        payload = typeof event.data === 'string' ? JSON.parse(event.data) as { reason?: string } : event.data;
+      } catch {
+        // Malformed revocation payloads still invalidate the session safely.
+      }
+      const reason = payload.reason === 'account-banned' ? 'banned' : payload.reason === 'account-deleted' ? 'deleted' : 'credential-changed';
+      redirect(reason);
+    };
     stream?.addEventListener('account-revoked', revoke);
+    const poll = window.setInterval(() => {
+      void fetch('/gateway/api/me', { headers: { accept: 'application/json' } })
+        .then(async (response) => {
+          if (response.ok) return;
+          const body = (await response.json().catch(() => ({}))) as { code?: string };
+          const reason = body.code === 'ACCOUNT_BANNED' ? 'banned' : body.code === 'ACCOUNT_DELETED' ? 'deleted' : 'credential-changed';
+          redirect(reason);
+        })
+        .catch(() => {
+          // Network interruptions alone do not invalidate the session; SSE and the next poll retry.
+        });
+    }, 1000);
     return () => {
+      window.clearInterval(poll);
       stream?.removeEventListener('account-revoked', revoke);
       stream?.close();
     };
@@ -486,6 +512,7 @@ export function AccountMenu(props: { wide: boolean } & PropsLocale<'dshaccess'>)
     h('dt', null, t('dailyQuotaLabel')), h('dd', null, me.dailyMinutesLimit === null || me.dailyMinutesLimit === undefined ? t('unlimited') : `${String(me.dailyMinutesLimit)} min`),
   ) : null,
   me?.role === 'admin' ? h('button', { type: 'button', className: 'dsh-access-account-manage', onClick: () => { setOpen(false); setAdminOpen(true); } }, t('accountManage')) : null,
+  me?.role === 'admin' ? h('button', { type: 'button', className: 'dsh-access-account-manage', onClick: () => { setOpen(false); window.location.assign('/settings'); } }, '网络配置') : null,
   error ? h('div', { className: 'dsh-access-error' }, error) : null,
   h('button', { type: 'button', className: 'dsh-access-account-logout', disabled: busy, onClick: logout }, busy ? t('loggingOut') : t('logout')),
   );

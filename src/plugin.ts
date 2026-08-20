@@ -14,7 +14,7 @@ import https from 'node:https';
 import net from 'node:net';
 import jwt from 'jsonwebtoken';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, type PlatformConfig } from './config.js';
@@ -23,8 +23,10 @@ import { createFieldCrypto } from './encrypt.js';
 import { AuthService, AuthError, assertNoSqlInjection, type AuthedUser, type RequestMeta } from './auth.js';
 import { findDshRoot, patchStatus } from './patch.js';
 import { assignWorkspace } from './workspace-assignment.js';
-import { parseGatewayPort, writeEnvFileAtomic, writeGatewayPort } from './gateway-settings.js';
+import { parseGatewayHost, parseGatewayPort, writeEnvFileAtomic, writeGatewayConfig } from './gateway-settings.js';
+import { networkInterfaces } from 'node:os';
 import { RemoteAccessService } from './remote-access.js';
+import { mutatePluginManifest } from './plugin-manager.js';
 import {
   GATEWAY_PROXY_HEADER,
   isDirectLocalPluginRequest,
@@ -41,9 +43,10 @@ export async function restartGatewayAndRefreshRemote(
   runtime: Pick<GatewayRuntime, 'restart'>,
   remote: RemoteAccessPortController | null,
   port: number,
+  host?: string,
 ): Promise<void> {
   if (remote !== null) await remote.stopTunnel(true);
-  await runtime.restart(port);
+  await runtime.restart(port, host);
   if (remote !== null) await remote.setGatewayPort(port);
 }
 
@@ -89,6 +92,20 @@ function writeJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(text);
 }
 
+type WorkspaceCompensationRegistry = {
+  resolveByPath(path: string): Promise<{ id: string; path: string } | undefined>;
+  create(path: string): Promise<{ id: string; path: string }>;
+  delete(id: string): Promise<boolean>;
+};
+
+function workspaceCompensationRegistry(ctx: Context): WorkspaceCompensationRegistry | null {
+  try {
+    return ctx.get('workspaceRegistry') as unknown as WorkspaceCompensationRegistry;
+  } catch {
+    return null;
+  }
+}
+
 function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -113,6 +130,12 @@ function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   });
 }
 
+function localGatewayAddresses(): string[] {
+  return Object.values(networkInterfaces()).flatMap((entries) =>
+    (entries ?? []).filter((entry) => !entry.internal).map((entry) => entry.address),
+  );
+}
+
 function localDay(): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -132,6 +155,21 @@ function limitValue(value: unknown, fallback: number | null): number | null {
 }
 
 /** 通知网关进程：重载补丁 + 延迟重启 dsh-web（fire-and-forget） */
+function notifyGatewayRevocation(cfg: PlatformConfig, userId: number, reason: 'account-banned' | 'account-deleted' | 'credential-changed'): void {
+  const mod = cfg.gateway.tls !== null ? https : http;
+  const protocol = cfg.gateway.tls !== null ? 'https' : 'http';
+  const body = JSON.stringify({ userId, reason });
+  const gatewayHost = cfg.gateway.host === '0.0.0.0' ? '127.0.0.1' : cfg.gateway.host;
+  const req = mod.request(`${protocol}://${gatewayHost}:${String(cfg.gateway.port)}/gateway/internal/revoke-user`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-internal-secret': cfg.internalSecret, 'content-length': String(Buffer.byteLength(body)) },
+    rejectUnauthorized: false,
+    timeout: 4000,
+  }, (res) => { res.resume(); });
+  req.on('error', () => {});
+  req.end(body);
+}
+
 function notifyGateway(cfg: PlatformConfig): void {
   const mod = cfg.gateway.tls !== null ? https : http;
   const url = `${cfg.gateway.tls !== null ? 'https' : 'http'}://127.0.0.1:${String(cfg.gateway.port)}/gateway/internal/patch`;
@@ -179,6 +217,45 @@ function gatewayAlreadyRunning(port: number): Promise<boolean> {
   });
 }
 
+/** Confirm that the listener is the dsh-access child, not an unrelated process. */
+export function probeManagedGateway(
+  port: number,
+  host: string,
+  tls: boolean,
+  internalSecret: string,
+): Promise<boolean> {
+  const transport = tls ? https : http;
+  const hostname = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+  return new Promise((resolve) => {
+    const request = transport.request({
+      hostname,
+      port,
+      path: '/gateway/internal/health',
+      method: 'GET',
+      headers: { 'x-internal-secret': internalSecret },
+      rejectUnauthorized: false,
+      timeout: 500,
+    }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      response.on('end', () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { ok?: boolean; service?: string };
+          resolve(response.statusCode === 200 && body.ok === true && body.service === 'dsh-access-gateway');
+        } catch {
+          resolve(false);
+        }
+      });
+    });
+    request.on('error', () => resolve(false));
+    request.on('timeout', () => {
+      request.destroy();
+      resolve(false);
+    });
+    request.end();
+  });
+}
+
 /**
  * 自动拉起外部访问管理：dsh 启动时（本插件被加载）spawn 网关子进程，
  * 无需任何额外启动命令。dsh 退出时（ctx.dispose）子进程随停；
@@ -187,11 +264,38 @@ function gatewayAlreadyRunning(port: number): Promise<boolean> {
 export interface GatewayRuntime {
   readonly envPath: string;
   readonly port: number;
-  restart(port: number): Promise<void>;
+  restart(port: number, host?: string): Promise<void>;
 }
 
 function gatewayRuntimeError(code: string, message: string): Error & { code: string } {
   return Object.assign(new Error(message), { code });
+}
+
+function pluginProfileDir(): string {
+  const dshHome = process.env.DSH_HOME?.trim() || path.join(process.env.HOME || '', '.dsh');
+  return path.join(dshHome, 'profiles', 'web');
+}
+
+function pluginManifestPath(): string {
+  return path.join(pluginProfileDir(), 'package.json');
+}
+
+function pluginManifestSummary(file: string): { dependencies: Record<string, string>; bundles: string[] } {
+  const manifest = JSON.parse(readFileSync(file, 'utf8')) as Record<string, any>;
+  const dependencies = manifest.dependencies && typeof manifest.dependencies === 'object' ? manifest.dependencies : {};
+  const bundles = manifest.dsh?.profile?.bundles;
+  return {
+    dependencies: Object.fromEntries(Object.entries(dependencies).filter(([name]) => name !== 'dsh-access')) as Record<string, string>,
+    bundles: Array.isArray(bundles) ? bundles.filter((value): value is string => typeof value === 'string' && value !== 'dsh-access') : [],
+  };
+}
+
+function runPnpm(cwd: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('pnpm', args, { cwd, stdio: 'ignore' });
+    child.once('error', reject);
+    child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`pnpm exited with code ${String(code ?? 'unknown')}`)));
+  });
 }
 
 function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<void> {
@@ -210,7 +314,12 @@ function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<void>
   });
 }
 
-async function waitForGatewayPort(port: number, child: ChildProcess, launchError: () => Error | null): Promise<void> {
+async function waitForGatewayPort(
+  port: number,
+  child: ChildProcess,
+  launchError: () => Error | null,
+  readyProbe: () => Promise<boolean>,
+): Promise<void> {
   const deadline = Date.now() + 8000;
   while (Date.now() < deadline) {
     const error = launchError();
@@ -218,7 +327,7 @@ async function waitForGatewayPort(port: number, child: ChildProcess, launchError
     if (child.exitCode !== null || child.signalCode !== null) {
       throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '网关进程在端口就绪前退出');
     }
-    if (await gatewayAlreadyRunning(port)) return;
+    if (await readyProbe()) return;
     await new Promise((resolve) => setTimeout(resolve, 120));
   }
   throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', `网关端口 ${String(port)} 启动超时`);
@@ -255,7 +364,7 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
     }
   };
 
-  const launch = async (port: number): Promise<void> => {
+  const launch = async (port: number, host = cfg.gateway.host): Promise<void> => {
     if (disposed) throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '网关控制器已停止');
     if (!existsSync(cliPath)) {
       throw gatewayRuntimeError('GATEWAY_RESTART_FAILED', '访问管理未编译（缺少 dist/cli.js）');
@@ -278,6 +387,7 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
       env: {
         ...process.env,
         MCP_GATEWAY_PORT: String(port),
+        MCP_GATEWAY_HOST: host,
         DSH_GATEWAY_PARENT_PID: String(process.pid),
         DSH_ACCESS_ENV_FILE: envPath,
         MCP_DSH_ROOT: detectedDshRoot ?? '',
@@ -302,7 +412,12 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
       }
     });
     try {
-      await waitForGatewayPort(port, launched, () => spawnError);
+      await waitForGatewayPort(
+        port,
+        launched,
+        () => spawnError,
+        () => probeManagedGateway(port, host, cfg.gateway.tls !== null, cfg.internalSecret),
+      );
       activePort = port;
     } catch (error) {
       if (child === launched) child = null;
@@ -343,8 +458,8 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
     get port() {
       return activePort;
     },
-    async restart(port: number): Promise<void> {
-      if (port === activePort && child !== null && child.exitCode === null && child.signalCode === null) return;
+    async restart(port: number, host = cfg.gateway.host): Promise<void> {
+      if (port === activePort && host === cfg.gateway.host && child !== null && child.exitCode === null && child.signalCode === null) return;
       if (port !== activePort && (await gatewayAlreadyRunning(port))) {
         throw gatewayRuntimeError('PORT_IN_USE', `端口 ${String(port)} 已被占用`);
       }
@@ -352,7 +467,8 @@ function startGateway(ctx: Context, cfg: PlatformConfig): GatewayRuntime {
         throw gatewayRuntimeError('GATEWAY_NOT_MANAGED', '当前网关不是由本 DSH 进程启动，请重启 DSH 后再修改端口');
       }
       await stopChild();
-      await launch(port);
+      await launch(port, host);
+      cfg.gateway.host = host;
     },
   };
 }
@@ -381,6 +497,19 @@ export function apply(ctx: Context): void {
       auth = null;
     }
   }
+
+  const workspaceRegistry = workspaceCompensationRegistry(ctx);
+  const ensureRegisteredWorkspace = async (root: string): Promise<boolean> => {
+    if (workspaceRegistry === null) return false;
+    if (await workspaceRegistry.resolveByPath(root)) return false;
+    await workspaceRegistry.create(root);
+    return true;
+  };
+  const removeRegisteredWorkspace = async (root: string): Promise<void> => {
+    if (workspaceRegistry === null) return;
+    const workspace = await workspaceRegistry.resolveByPath(root);
+    if (workspace !== undefined) await workspaceRegistry.delete(workspace.id);
+  };
 
   /** 从网关 JWT cookie 解析调用方身份（含凭据版本校验） */
   const callerOf = (req: IncomingMessage): AuthedUser | null => {
@@ -500,6 +629,59 @@ export function apply(ctx: Context): void {
   const routes: WebRoute[] = [
     {
       kind: 'exact',
+      path: '/api/dsh-access/plugins',
+      handler: async (req, res) => {
+        const caller = guard(req, res);
+        if (!caller) return;
+        if (caller.role !== 'admin') {
+          writeJson(res, 403, { ok: false, code: 'FORBIDDEN', error: '仅主用户可管理插件' });
+          return;
+        }
+        const manifest = pluginManifestPath();
+        try {
+          if (req.method === 'GET') {
+            if (!existsSync(manifest)) {
+              writeJson(res, 404, { ok: false, code: 'PLUGIN_PROFILE_NOT_FOUND', error: 'DSH Web profile 不存在' });
+              return;
+            }
+            writeJson(res, 200, { ok: true, ...pluginManifestSummary(manifest), restartRequired: false });
+            return;
+          }
+          if (req.method !== 'POST') {
+            writeJson(res, 405, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'method not allowed' });
+            return;
+          }
+          const body = await readJsonBody(req);
+          const action = typeof body.action === 'string' ? body.action : '';
+          const packageName = typeof body.packageName === 'string' ? body.packageName.trim() : '';
+          if (!['install', 'remove', 'enable', 'disable'].includes(action) || packageName === '') {
+            writeJson(res, 400, { ok: false, code: 'INVALID_PLUGIN_OPERATION', error: '插件操作或包名无效' });
+            return;
+          }
+          const pluginAction = action as 'install' | 'remove' | 'enable' | 'disable';
+          const profile = pluginProfileDir();
+          if (!existsSync(manifest)) {
+            writeJson(res, 404, { ok: false, code: 'PLUGIN_PROFILE_NOT_FOUND', error: 'DSH Web profile 不存在' });
+            return;
+          }
+          if (pluginAction === 'install') {
+            const spec = typeof body.spec === 'string' && body.spec.trim() !== '' ? body.spec.trim() : packageName;
+            await runPnpm(profile, ['add', '--save', '--ignore-scripts', spec]);
+            mutatePluginManifest(manifest, { action: pluginAction, packageName, spec });
+          } else if (pluginAction === 'remove') {
+            await runPnpm(profile, ['remove', packageName]);
+            mutatePluginManifest(manifest, { action: pluginAction, packageName });
+          } else {
+            mutatePluginManifest(manifest, { action: pluginAction, packageName });
+          }
+          writeJson(res, 200, { ok: true, action: pluginAction, packageName, restartRequired: true, ...pluginManifestSummary(manifest) });
+        } catch (error) {
+          failJson(res, error);
+        }
+      },
+    },
+    {
+      kind: 'exact',
       path: '/api/dsh-access/state',
       handler: (req, res) => {
         const caller = guard(req, res);
@@ -613,19 +795,6 @@ export function apply(ctx: Context): void {
           writeJson(res, 405, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'method not allowed' });
           return;
         }
-        const directLocal = isDirectLocalPluginRequest({
-          remoteAddress: req.socket.remoteAddress,
-          host: req.headers.host,
-          gatewayMarker: req.headers[GATEWAY_PROXY_HEADER],
-        });
-        if (!directLocal) {
-          writeJson(res, 403, {
-            ok: false,
-            code: 'GATEWAY_CONFIG_LOCAL_ONLY',
-            error: '修改网关端口只能在本机 3080 设置页面操作',
-          });
-          return;
-        }
         if (gatewayRuntime === null) {
           writeJson(res, 503, { ok: false, code: 'NOT_CONFIGURED', error: '网关尚未配置' });
           return;
@@ -640,37 +809,46 @@ export function apply(ctx: Context): void {
             upstreamPort = null;
           }
           const port = parseGatewayPort(body.port, upstreamPort);
+          const host = parseGatewayHost(body.host ?? cfg.gateway.host, localGatewayAddresses());
           const previousPort = gatewayRuntime.port;
-          if (port === previousPort) {
-            writeJson(res, 200, { ok: true, port, host: cfg.gateway.host, upstream: cfg.gateway.upstream });
+          const previousHost = cfg.gateway.host;
+          if (port === previousPort && host === previousHost) {
+            writeJson(res, 200, { ok: true, port, host, upstream: cfg.gateway.upstream });
             return;
           }
-          if (await gatewayAlreadyRunning(port)) {
+          if (port !== previousPort && await gatewayAlreadyRunning(port)) {
             writeJson(res, 409, { ok: false, code: 'PORT_IN_USE', error: `端口 ${String(port)} 已被占用` });
             return;
           }
-          const previousProcessValue = process.env.MCP_GATEWAY_PORT;
-          const previousEnv = writeGatewayPort(gatewayRuntime.envPath, port);
+          const previousProcessPort = process.env.MCP_GATEWAY_PORT;
+          const previousProcessHost = process.env.MCP_GATEWAY_HOST;
+          const previousEnv = writeGatewayConfig(gatewayRuntime.envPath, { port, host });
           process.env.MCP_GATEWAY_PORT = String(port);
+          process.env.MCP_GATEWAY_HOST = host;
           try {
-            await restartGatewayAndRefreshRemote(gatewayRuntime, remoteAccess, port);
+            await restartGatewayAndRefreshRemote(gatewayRuntime, remoteAccess, port, host);
             cfg.gateway.port = port;
-            writeJson(res, 200, { ok: true, port, host: cfg.gateway.host, upstream: cfg.gateway.upstream });
+            cfg.gateway.host = host;
+            writeJson(res, 200, { ok: true, port, host, upstream: cfg.gateway.upstream });
           } catch (error) {
             writeEnvFileAtomic(gatewayRuntime.envPath, previousEnv);
-            if (previousProcessValue === undefined) delete process.env.MCP_GATEWAY_PORT;
-            else process.env.MCP_GATEWAY_PORT = previousProcessValue;
+            if (previousProcessPort === undefined) delete process.env.MCP_GATEWAY_PORT;
+            else process.env.MCP_GATEWAY_PORT = previousProcessPort;
+            if (previousProcessHost === undefined) delete process.env.MCP_GATEWAY_HOST;
+            else process.env.MCP_GATEWAY_HOST = previousProcessHost;
             cfg.gateway.port = previousPort;
+            cfg.gateway.host = previousHost;
             try {
-              await gatewayRuntime.restart(previousPort);
+              await gatewayRuntime.restart(previousPort, previousHost);
+              if (remoteAccess !== null) await remoteAccess.setGatewayPort(previousPort);
             } catch (rollbackError) {
-              console.error('[dsh-access] 网关端口回滚失败:', rollbackError);
+              console.error('[dsh-access] 网关配置回滚失败:', rollbackError);
             }
             const code = error instanceof Error && 'code' in error ? String((error as Error & { code: unknown }).code) : 'GATEWAY_RESTART_FAILED';
             writeJson(res, code === 'PORT_IN_USE' ? 409 : 500, {
               ok: false,
               code,
-              error: error instanceof Error ? error.message : '网关重启失败，已恢复原端口',
+              error: error instanceof Error ? error.message : '网关重启失败，已恢复原配置',
             });
           }
         } catch (error) {
@@ -782,6 +960,9 @@ export function apply(ctx: Context): void {
                   baseRoot: cfg.workspaceRoot,
                   specifiedRoot: desiredRoot,
                 });
+          const workspaceCreated = assignment.root !== current.workspace_root
+            ? await ensureRegisteredWorkspace(assignment.root)
+            : false;
           const rawSandbox = body.sandboxMode;
           const sandboxMode =
             rawSandbox === 'read-only' ||
@@ -789,21 +970,61 @@ export function apply(ctx: Context): void {
             rawSandbox === 'danger-full-access'
               ? rawSandbox
               : current.sandbox_mode ?? 'workspace-write';
-          db!.setPermissions(userId, {
-            allowedFolders: [assignment.root],
-            hourlyTokenLimit: limitValue(body.hourlyTokenLimit, current.hourly_token_limit),
-            dailyMinutesLimit: limitValue(body.dailyMinutesLimit, current.daily_minutes_limit),
-            allowUpload: typeof body.allowUpload === 'boolean' ? body.allowUpload : current.allow_upload,
-            allowGitDownload:
-              typeof body.allowGitDownload === 'boolean'
-                ? body.allowGitDownload
-                : current.allow_git_download,
-            banned: typeof body.banned === 'boolean' ? body.banned : current.banned,
-            sandboxMode,
-            workspaceMode: assignment.mode,
-            workspaceRoot: assignment.root,
-            remark: current.remark,
-          });
+          const wasBanned = current.banned;
+          try {
+            db!.setPermissions(userId, {
+              allowedFolders: [assignment.root],
+              hourlyTokenLimit: limitValue(body.hourlyTokenLimit, current.hourly_token_limit),
+              dailyMinutesLimit: limitValue(body.dailyMinutesLimit, current.daily_minutes_limit),
+              allowUpload: typeof body.allowUpload === 'boolean' ? body.allowUpload : current.allow_upload,
+              allowGitDownload:
+                typeof body.allowGitDownload === 'boolean'
+                  ? body.allowGitDownload
+                  : current.allow_git_download,
+              banned: typeof body.banned === 'boolean' ? body.banned : current.banned,
+              sandboxMode,
+              workspaceMode: assignment.mode,
+              workspaceRoot: assignment.root,
+              remark: current.remark,
+            });
+          } catch (error) {
+            try {
+              db!.setPermissions(userId, {
+                allowedFolders: current.allowed_folders,
+                hourlyTokenLimit: current.hourly_token_limit,
+                dailyMinutesLimit: current.daily_minutes_limit,
+                allowUpload: current.allow_upload,
+                allowGitDownload: current.allow_git_download,
+                banned: current.banned,
+                sandboxMode: current.sandbox_mode,
+                workspaceMode: current.workspace_mode,
+                workspaceRoot: current.workspace_root,
+                remark: current.remark,
+              });
+            } catch {
+              try {
+                db!.setPermissions(userId, {
+                  allowedFolders: [],
+                  hourlyTokenLimit: current.hourly_token_limit,
+                  dailyMinutesLimit: current.daily_minutes_limit,
+                  allowUpload: current.allow_upload,
+                  allowGitDownload: current.allow_git_download,
+                  banned: current.banned,
+                  sandboxMode: current.sandbox_mode,
+                  workspaceMode: 'repair-required',
+                  workspaceRoot: null,
+                  remark: current.remark,
+                });
+              } catch { /* 保留原始失败 */ }
+            }
+            if (workspaceCreated) {
+              await removeRegisteredWorkspace(assignment.root).catch((cleanupError) => {
+                console.error('[dsh-access] Legacy Workspace compensation failed; manual repair may be required:', cleanupError);
+              });
+            }
+            throw error;
+          }
+          if (!wasBanned && Boolean(body.banned)) notifyGatewayRevocation(cfg, userId, 'account-banned');
           writeJson(res, 200, { ok: true });
         } catch (error) {
           writeJson(res, 400, {
@@ -826,6 +1047,8 @@ export function apply(ctx: Context): void {
           const password = typeof body.password === 'string' ? body.password : '';
           const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : undefined;
           await auth!.changePassword(caller, target, password, metaOf(req), currentPassword);
+          const changed = db!.getUserByUsername(target);
+          if (changed) notifyGatewayRevocation(cfg, changed.id, 'credential-changed');
           writeJson(res, 200, { ok: true });
         } catch (error) {
           failJson(res, error);
@@ -843,7 +1066,9 @@ export function apply(ctx: Context): void {
           const target = typeof body.target === 'string' && body.target !== '' ? body.target : caller.username;
           const username = typeof body.username === 'string' ? body.username : '';
           assertNoSqlInjection(username, 'username');
+          const renamed = db!.getUserByUsername(target);
           await auth!.renameUser(caller, target, username, metaOf(req));
+          if (renamed) notifyGatewayRevocation(cfg, renamed.id, 'credential-changed');
           writeJson(res, 200, { ok: true });
         } catch (error) {
           failJson(res, error);

@@ -147,6 +147,7 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
   const [patchState, setPatchState] = useState<PatchState | null>(null);
   const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | null>(null);
   const [gatewayPortDraft, setGatewayPortDraft] = useState('');
+  const [gatewayHostDraft, setGatewayHostDraft] = useState('');
   const [gatewayRouteAvailable, setGatewayRouteAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -187,6 +188,7 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
             .then((gateway) => {
               setGatewayConfig(gateway);
               setGatewayPortDraft(String(gateway.port));
+              setGatewayHostDraft(gateway.host);
             })
             .catch(() => setGatewayConfig(null));
           api<PermOverview>('/api/dsh-access/overview')
@@ -257,12 +259,12 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
 
   const saveGatewayPort = () => {
     const port = Number(gatewayPortDraft);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    if (!Number.isInteger(port) || port < 1 || port > 65535 || gatewayHostDraft.trim() === '') {
       setError(t('gatewayPortInvalid'));
       return;
     }
     void run(async () => {
-      const updated = await api<GatewayConfig>('/api/dsh-access/gateway/config', { port: gatewayPortDraft });
+      const updated = await api<GatewayConfig>('/api/dsh-access/gateway/config', { port: gatewayPortDraft, host: gatewayHostDraft.trim() });
       setGatewayConfig(updated);
       setGatewayPortDraft(String(updated.port));
       const view = gatewaySaveViewState(remoteRefreshKey);
@@ -396,11 +398,18 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
               value: gatewayPortDraft,
               onChange: (e: { target: { value: string } }) => setGatewayPortDraft(e.target.value),
             }),
+            h('input', {
+              className: 'dsh-access-input',
+              type: 'text',
+              'aria-label': '监听地址',
+              value: gatewayHostDraft,
+              onChange: (e: { target: { value: string } }) => setGatewayHostDraft(e.target.value),
+            }),
             h(
               'button',
               {
                 className: 'dsh-access-btn',
-                disabled: busy || gatewayPortDraft === '' || gatewayPortDraft === String(gatewayConfig?.port ?? ''),
+                disabled: busy || gatewayPortDraft === '' || gatewayHostDraft.trim() === '' || (gatewayPortDraft === String(gatewayConfig?.port ?? '') && gatewayHostDraft.trim() === (gatewayConfig?.host ?? '')),
                 onClick: saveGatewayPort,
               },
               t('saveGatewayPort'),
@@ -474,19 +483,19 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
       { className: 'dsh-access-section' },
       h('span', { className: 'dsh-access-label' }, t('chgName')),
       isAdmin && h('span', { className: 'dsh-access-hint' }, t('targetUser')),
-      targetSelect(nameTarget, setNameTarget),
-      h('input', {
+      isAdmin && targetSelect(nameTarget, setNameTarget),
+      isAdmin && h('input', {
         className: 'dsh-access-input',
         placeholder: t('newNamePh'),
         value: nameNew,
         onChange: (e: { target: { value: string } }) => setNameNew(e.target.value),
       }),
-      h(
+      isAdmin && h(
         'div',
         { className: 'dsh-access-row' },
         h('button', { className: 'dsh-access-btn', disabled: busy, onClick: rename }, t('saveName')),
       ),
-      h('div', { className: 'dsh-access-hint' }, t('nameHint')),
+      isAdmin && h('div', { className: 'dsh-access-hint' }, t('nameHint')),
     ),
 
     // ── 子用户管理与权限（仅主用户，点击用户行展开） ──

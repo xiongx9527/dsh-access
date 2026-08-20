@@ -74,4 +74,11 @@ test('session fork refreshes sessionId paths and enforces the guest workspace bo
   });
   assert.equal(outsideResponse.status, 403);
   assert.deepEqual(methods, ['session.list', 'session.fork']);
+
+  const promptResponse = await fetch(`${baseUrl}/api/session.prompt`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ type: 'client-request', rpcId: 'prompt-outside', method: 'session.prompt', payload: { sessionId: 'session-outside', prompt: 'secret' } }),
+  });
+  assert.equal(promptResponse.status, 403);
+  assert.deepEqual(methods, ['session.list', 'session.fork']);
 });
