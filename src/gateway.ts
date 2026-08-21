@@ -51,6 +51,7 @@ import { authorizeFilesystemPath } from './path-policy.js';
 import { markGatewayProxyHeaders } from './local-access.js';
 import { readCookie } from './cookie.js';
 import { classifyGatewayPath } from './gateway-path.js';
+import { sanitizeJsonStrings, sanitizeText } from './content-sanitization.js';
 
 /** 网关内部扩展请求：权限执行时把用户/权限附在 req 上，供后续中间件与代理读取 */
 type Req = Request & {
@@ -1657,7 +1658,7 @@ export function createGatewayServer(
     const me = apiAuth(req, res);
     if (!me) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const content = typeof body.content === 'string' ? body.content.trim() : '';
+    const content = typeof body.content === 'string' ? sanitizeText(body.content) : '';
     if (content === '') {
       res.status(400).json({ ok: false, code: 'INVALID', error: '内容不能为空' });
       return;
@@ -1966,6 +1967,33 @@ export function createGatewayServer(
               const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
               delete respHeaders['content-length'];
               delete respHeaders['content-encoding'];
+              const encoded = compressResponseBody(req, respHeaders, out);
+              res.writeHead(upstreamRes.statusCode ?? 200, encoded.headers);
+              res.end(encoded.body);
+            } catch {
+              const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
+              res.writeHead(upstreamRes.statusCode ?? 200, respHeaders);
+              res.end(Buffer.concat(chunks));
+            }
+          });
+          upstreamRes.on('error', () => res.destroy());
+          return;
+        }
+
+        // ── session.history：模型输入边界清洗隐藏 Unicode；文件 read/raw 不在此改写 ──
+        if (req.method === 'POST' && /^\/api\/session[.\/]history$/.test(parsedUrl.pathname)) {
+          const chunks: Buffer[] = [];
+          upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          upstreamRes.on('end', () => {
+            try {
+              let body: Buffer<ArrayBufferLike> = Buffer.concat(chunks);
+              body = decodeResponseBody(body, String(upstreamRes.headers['content-encoding'] ?? ''));
+              const cleaned = sanitizeJsonStrings(JSON.parse(body.toString('utf8')));
+              const out = Buffer.from(JSON.stringify(cleaned), 'utf8');
+              const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
+              delete respHeaders['content-length'];
+              delete respHeaders['content-encoding'];
+              delete respHeaders['transfer-encoding'];
               const encoded = compressResponseBody(req, respHeaders, out);
               res.writeHead(upstreamRes.statusCode ?? 200, encoded.headers);
               res.end(encoded.body);
