@@ -1646,6 +1646,21 @@ export function createGatewayServer(
     res.json({ ok: true });
   });
 
+  // ── 当前账号聊天入口偏好（默认显示；隐藏不删除消息） ───────────
+  app.get('/gateway/api/chat-settings', (req, res) => {
+    const me = apiAuth(req, res);
+    if (!me) return;
+    res.json({ ok: true, chatEnabled: db.getSetting(`chat_enabled:${String(me.userId)}`) !== '0' });
+  });
+
+  app.post('/gateway/api/chat-settings', jsonBody, (req, res) => {
+    const me = apiAuth(req, res);
+    if (!me) return;
+    const enabled = (req.body as Record<string, unknown> | undefined)?.enabled !== false;
+    db.setSetting(`chat_enabled:${String(me.userId)}`, enabled ? '1' : '0');
+    res.json({ ok: true, chatEnabled: enabled });
+  });
+
   // ── 留言列表（所有登录用户；按收件人过滤） ─────────────────────
   app.get('/gateway/api/messages', (req, res) => {
     const me = apiAuth(req, res);

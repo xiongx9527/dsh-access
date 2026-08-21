@@ -154,6 +154,7 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
   const [busy, setBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<'account' | 'remote'>('account');
   const [remoteRefreshKey, setRemoteRefreshKey] = useState(0);
+  const [chatEnabled, setChatEnabled] = useState(true);
 
   // 改密表单
   const [pwTarget, setPwTarget] = useState('');
@@ -220,6 +221,10 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
     api<{ status: PatchState | null }>('/api/dsh-access/patch/status')
       .then((r) => setPatchState(r.status))
       .catch(() => setPatchState(null));
+    fetch('/gateway/api/chat-settings')
+      .then((response) => response.json())
+      .then((result) => setChatEnabled(result.chatEnabled !== false))
+      .catch(() => undefined);
   };
 
   useEffect(() => {
@@ -255,6 +260,15 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
         window.location.reload();
       }, 6000);
     }, t('reloading'));
+  };
+
+  const saveChatPreference = (enabled: boolean) => {
+    setChatEnabled(enabled);
+    void fetch('/gateway/api/chat-settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }).catch(() => setChatEnabled(!enabled));
   };
 
   const saveGatewayPort = () => {
@@ -380,6 +394,16 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
         h('button', { className: 'dsh-access-btn', disabled: busy, onClick: reloadPatch }, t('reloadPatch')),
       ),
       h('div', { className: 'dsh-access-hint' }, t('patchHint1'), ' ', t('patchHint2')),
+      h(
+        'label',
+        { className: 'dsh-access-check' },
+        h('input', {
+          type: 'checkbox',
+          checked: chatEnabled,
+          onChange: (event: { target: { checked: boolean } }) => saveChatPreference(event.target.checked),
+        }),
+        t('chatEntry'),
+      ),
       isAdmin &&
         h(
           'div',

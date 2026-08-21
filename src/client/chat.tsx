@@ -63,10 +63,20 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   const [error, setError] = useState('');
   const [unread, setUnread] = useState(0);
   const [shaking, setShaking] = useState(false);
+  const [chatEnabled, setChatEnabled] = useState<boolean | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const lastSeenId = useRef(0);
   const openRef = useRef(false);
   const pollStateRef = useRef<ChatPollState>({ initialized: false, lastSeenId: 0, rebuilding: false });
+
+  useEffect(() => {
+    let active = true;
+    fetch('/gateway/api/chat-settings')
+      .then((response) => response.json())
+      .then((data) => { if (active) setChatEnabled(data.chatEnabled !== false); })
+      .catch(() => { if (active) setChatEnabled(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     openRef.current = open;
@@ -84,6 +94,7 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
 
   // 轮询加载 + 未读统计（不依赖 SSE，消息无需刷新页面）
   useEffect(() => {
+    if (chatEnabled !== true) return;
     let disposed = false;
     let inFlight = false;
 
@@ -129,7 +140,7 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [chatEnabled]);
 
   // 新消息 / 打开面板时滚动到底部
   useEffect(() => {
@@ -182,6 +193,8 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   const toggleTag = (tag: string) => {
     setTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
   };
+
+  if (chatEnabled !== true) return null;
 
   return (
     <>
