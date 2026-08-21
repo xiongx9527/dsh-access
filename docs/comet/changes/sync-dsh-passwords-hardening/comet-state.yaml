@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 51
+state_version: 55
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,11 +29,11 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 13
+  iteration: 14
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 11
-  no_progress_count: 5
+  failed_iteration_count: 12
+  no_progress_count: 6
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
@@ -578,6 +578,35 @@ history:
         control-obscured token plus malformed-percent suffix combinations.
       truncated: false
     completed_at: 2026-08-21T10:09:33.705Z
+  - goal_cycle: 2
+    iteration: 13
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A32
+    summary:
+      text: "Independent read-only verification of candidate
+        34b63579-b235-4ea9-befb-d84f54627a12 at HEAD aa5ebdf failed: 39
+        acceptance criteria passed and A2/A32 failed. All 178 Runtime tests and
+        build/diff/scope/package gates passed. Exhaustive control-obscurity
+        testing passed 405,504/405,504 cases and prior benign encoded
+        `#`/`?`/`%` adjacency remained upstream in 79,776/79,776 cases. The
+        repaired mixed matrix now rejects 64,680/73,920 cases, but 9,240 `%80`
+        suffix combinations still classify upstream, so malformed
+        gateway-derived targets are not yet completely fail-closed."
+      truncated: false
+    completed_at: 2026-08-21T10:19:11.332Z
+  - goal_cycle: 2
+    iteration: 13
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: User authorized continuation; revise implementation for invalid UTF-8
+        percent suffix mixed with control-obscured gateway tokens.
+      truncated: false
+    completed_at: 2026-08-21T10:19:12.554Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null

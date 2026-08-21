@@ -50,7 +50,7 @@ function claimsGatewayNamespace(pathname: string, rejectMalformedSuffix = false)
     const withoutControls = segment.replace(/[\u0000-\u001f\u007f]/g, '');
     if (stack.length === 0 && (
       withoutControls.toLowerCase() === 'gateway' ||
-      (rejectMalformedSuffix && /^gateway%(?![0-9a-f]{2})/i.test(withoutControls))
+      (rejectMalformedSuffix && /^gateway%/i.test(withoutControls))
     )) return true;
     stack.push(segment);
   }
@@ -70,9 +70,10 @@ export function classifyGatewayRequestTarget(method: string, requestTarget: stri
   const rawPath = rawPathOf(requestTarget);
   const decoded = decodeAsciiEscapes(rawPath);
   if (decoded.includes('\\')) return 'reject';
-  const hasMalformedPercent = /%(?![0-9a-f]{2})/i.test(rawPath);
-  const rawClaimsGateway = claimsGatewayNamespace(rawPath, true);
-  const decodedClaimsGateway = claimsGatewayNamespace(decoded, hasMalformedPercent);
+  let hasInvalidPercentEncoding = false;
+  try { decodeURIComponent(rawPath); } catch { hasInvalidPercentEncoding = true; }
+  const rawClaimsGateway = claimsGatewayNamespace(rawPath, hasInvalidPercentEncoding);
+  const decodedClaimsGateway = claimsGatewayNamespace(decoded, hasInvalidPercentEncoding);
   const normalizedSegments: string[] = [];
   for (const segment of decoded.replace(/\/+/g, '/').split('/')) {
     if (!segment || segment === '.') continue;
