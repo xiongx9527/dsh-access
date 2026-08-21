@@ -102,8 +102,10 @@ async function runTar(args: string[], signal: AbortSignal): Promise<string> {
   signal.addEventListener('abort', onAbort, { once: true });
   child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
   child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
-  await waitForProcess(child);
-  signal.removeEventListener('abort', onAbort);
+  await new Promise<void>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', () => resolve());
+  }).finally(() => signal.removeEventListener('abort', onAbort));
   signal.throwIfAborted();
   if (child.exitCode !== 0) throw new Error(`cloudflared archive failed: ${Buffer.concat(stderr).toString('utf8').trim()}`);
   return Buffer.concat(stdout).toString('utf8');

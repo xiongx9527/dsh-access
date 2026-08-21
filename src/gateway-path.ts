@@ -41,15 +41,10 @@ function decodePath(rawPath: string): { decoded: string; malformed: boolean } {
 
 /** Keep the reserved /gateway namespace out of the upstream SPA fallback. */
 export function classifyGatewayRequestTarget(method: string, requestTarget: string): GatewayPathClass {
-  if (requestTarget.includes('\\')) {
+  if (requestTarget.includes('\\') || requestTarget.startsWith('//') || /^https?:\/{3,}/i.test(requestTarget)) {
     const slashTarget = requestTarget.replace(/\\/g, '/');
-    const slashPath = rawPathOf(slashTarget);
-    const slashDecoded = decodePath(slashPath);
-    if (
-      /(?:^|\/)gateway(?:\/|$)/.test(slashTarget) ||
-      /^\/gateway(?:\/|$)/.test(slashPath) ||
-      /^\/gateway(?:\/|$)/.test(slashDecoded.decoded)
-    ) return 'reject';
+    const decodedTarget = decodePath(slashTarget);
+    if (/(?:^|\/)gateway(?:\/|$)/.test(decodedTarget.decoded)) return 'reject';
   }
   const rawPath = rawPathOf(requestTarget);
   const { decoded, malformed } = decodePath(rawPath);

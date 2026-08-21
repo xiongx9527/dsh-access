@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 23
+state_version: 27
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,592 +29,242 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 6
+  iteration: 7
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 4
+  failed_iteration_count: 5
   no_progress_count: 0
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
-    - A3
     - A12
     - A21
     - A32
-    - A33
-  next_action: repair-failed-acceptance
+  next_action: submit-builder-candidate
 acceptance:
   - id: A1
     source: brief.md
     text: A1：Cookie 名称精确匹配，只剥 ASCII space/tab，值中的 `=` 被保留；Unicode 空白伪造 Cookie
       不能认证，Gateway 与 Plugin 行为一致。
-    result: passed
-    reason:
-      text: src/cookie.ts is shared by Gateway and Plugin, strips only ASCII
-        space/tab, matches the exact cookie name, splits at the first '=',
-        preserves subsequent '=', and rejects Unicode-whitespace disguises.
-      truncated: false
+    result: pending
+    reason: null
   - id: A2
     source: brief.md
     text: A2：编码、双编码、压平和未知 `/gateway` 变形路径不能绕过登录门或代理到上游；合法 Gateway API 与本机 3080 行为不变。
-    result: failed
-    reason:
-      text: src/gateway-path.ts still misses malformed absolute/network-path backslash
-        targets. For example, http:////x\gateway\..\api/session.list and
-        //x\gateway\..\api/session.list classify as upstream while WHATWG URL
-        parsing normalizes them to /api/session.list, allowing a claimed gateway
-        path to reach upstream dispatch.
-      truncated: false
+    result: pending
+    reason: null
   - id: A3
     source: brief.md
     text: A3：session history 和聊天写入中的隐藏 Unicode、危险 HTML/CSS
       在模型输入边界被净化，普通文本、换行和数学比较符保留；文件 `read/raw/download` 保真。
-    result: failed
-    reason:
-      text: Chat writes and session.history are sanitized, and raw/read plus
-        dsh-uploads/dsh-ssh downloads are excluded from HTML injection. However,
-        permissions.ts identifies GET /api/session.export as a download surface
-        while shouldRewriteHtmlResponse still returns true for that route when
-        its response is text/html, so not all file-download responses are
-        byte-preserving.
-      truncated: false
+    result: pending
+    reason: null
   - id: A4
     source: brief.md
     text: A4：dsh-ssh 主机操作拒绝回环、私网、链路本地、未指定地址、IPv4 变体、mapped/compatible
       IPv6，以及任一解析结果为私网的 hostname；公网地址正常放行，DNS 失败时拒绝。
-    result: passed
-    reason:
-      text: src/ssrf-policy.ts handles inet_aton IPv4 forms, IPv6 mapped/compatible
-        and NAT64 forms, private/loopback/link-local/unspecified ranges, mixed
-        DNS answers, and DNS failure; gateway.ts rewrites an allowed hostname to
-        its resolved public address.
-      truncated: false
+    result: pending
+    reason: null
   - id: A5
     source: brief.md
     text: A5：被过滤、净化或重新压缩的响应不同时发送 Content-Length 与 Transfer-Encoding，也不保留失效
       Content-Encoding；透明响应无回归。
-    result: passed
-    reason:
-      text: headersForRewrittenBody removes stale Content-Length, Transfer-Encoding,
-        and Content-Encoding, while compressResponseBody always removes
-        Transfer-Encoding before assigning a replacement Content-Length or
-        encoding.
-      truncated: false
+    result: pending
+    reason: null
   - id: A6
     source: brief.md
     text: A6：既有多用户架构继续保证 session ownership、workspace 响应隔离、sandbox 降级和权限撤销；本 change
       不增加平行 ownership 表或判断路径。
-    result: passed
-    reason:
-      text: The diff retains the existing request-policy, workspace/session filtering,
-        sandbox enforcement, and active-connection revocation mechanisms and
-        introduces no parallel ownership table or authorization authority.
-      truncated: false
+    result: pending
+    reason: null
   - id: A7
     source: brief.md
     text: A7：dsh rc.6/rc.7 下 slot 和 patch 状态判断正确；rc.7 缺少旧白名单时不误报 missing，可选
       workspace 目标缺失不阻塞核心补丁。
-    result: passed
-    reason:
-      text: Stable slot keys are present, rc.6 whitelist patching is additive, rc.7
-        whitelist absence is treated as satisfied, and a missing optional
-        workspace target does not block core settings/host patches.
-      truncated: false
+    result: pending
+    reason: null
   - id: A8
     source: brief.md
     text: A8：workspace/session 搜索无结果可通过外部点击收起清空，浏览器自动填充不会污染搜索字段。
-    result: passed
-    reason:
-      text: The optional workspace patch clears and collapses completed zero-result
-        searches after outside interaction and adds autocomplete="off" plus the
-        noncredential dsh-access-session-search field name.
-      truncated: false
+    result: pending
+    reason: null
   - id: A9
     source: brief.md
     text: A9：聊天轮询使用 since 增量且不重叠；空数据库建立稳定基线，数据库重置或 ID 回退后重建基线且不产生 phantom 未读。
-    result: passed
-    reason:
-      text: Polling establishes a full baseline before using since, advances limited
-        pages by the last delivered ID, prevents overlap with inFlight, detects
-        epoch/ID rollback, rebuilds confirmed history, and now explicitly resets
-        accumulated unread state.
-      truncated: false
+    result: pending
+    reason: null
   - id: A10
     source: brief.md
     text: A10：聊天入口默认显示并可按当前账号隐藏/恢复，隐藏不删除消息；拖动位置按账号持久化且不误触打开。
-    result: passed
-    reason:
-      text: Chat defaults enabled, persists visibility under chat_enabled:<user-id>
-        without deleting messages, stores launcher position under
-        dsh-access-chat-position:<user-id>, and suppresses opening after pointer
-        movement.
-      truncated: false
+    result: pending
+    reason: null
   - id: A11
     source: brief.md
     text: A11：聊天消息支持头像、发送者元信息、现有标签和乐观发送；失败可恢复并显示错误，动画/触感遵守减少动画偏好。
-    result: passed
-    reason:
-      text: Chat renders avatars, sender metadata, timestamps and tags; optimistic
-        sends are retained at the history cap, successful sends replace
-        temporary entries, and failures restore content/tags and expose an
-        error.
-      truncated: false
+    result: pending
+    reason: null
   - id: A12
     source: brief.md
     text: A12：cloudflared 下载支持总超时/取消和同一 home 单飞，按官方源后显式 HTTPS 镜像顺序回退，日志不泄露完整镜像 URL。
-    result: failed
-    reason:
-      text: "The pre-aborted and zero-waiter join races are repaired, but the
-        advertised 120-second total timeout and shared cancellation do not cover
-        the whole transaction: runTar has no signal or timeout, executable
-        verification is not connected to the combined signal, and there is no
-        combined.throwIfAborted() before rename. An aborted or timed-out
-        transaction can therefore continue extracting, validating, and
-        installing."
-      truncated: false
+    result: pending
+    reason: null
   - id: A13
     source: brief.md
     text: A13：cloudflared 响应流式写入唯一临时文件，小于 1 MiB、解压失败或 `--version`
       验证失败均被清理；仅验证成功后原子替换，既有有效缓存不被失败下载破坏。
-    result: passed
-    reason:
-      text: Network bodies stream to unique attempt files, undersized and invalid
-        candidates are removed with their attempt directories, extraction is
-        isolated, version probing precedes installation, and rename occurs only
-        for a verified candidate.
-      truncated: false
+    result: pending
+    reason: null
   - id: A14
     source: brief.md
     text: A14：认证、Admin/Guest、ownership、远程访问、3088/3080、WebSocket/SSE
       的现有测试无回归，完整测试与构建通过。
-    result: passed
-    reason:
-      text: Reported runtime checks passed all 175 tests, the production build, diff
-        and scope scans, and package-notice validation; existing authentication,
-        ownership, remote-access, HTTP, WebSocket, and SSE regressions remain
-        covered.
-      truncated: false
+    result: pending
+    reason: null
   - id: A15
     source: specs/chat-experience/spec.md
     text: 聊天入口默认显示，并允许当前访问管理账号在设置中隐藏/恢复；偏好由服务端按账号保存，消息数据不删除。
-    result: passed
-    reason:
-      text: The server-backed chat setting defaults true and is scoped by
-        authenticated user ID; changing it only updates platform_settings and
-        leaves message rows intact.
-      truncated: false
+    result: pending
+    reason: null
   - id: A16
     source: specs/chat-experience/spec.md
     text: 聊天气泡支持拖动，位置保存在按当前账号命名的本地 UI 偏好中；点击打开不能被拖动误触发。
-    result: passed
-    reason:
-      text: Pointer movement updates launcher coordinates, persists them under an
-        account-specific localStorage key, and draggedRef prevents the resulting
-        click from opening the panel.
-      truncated: false
+    result: pending
+    reason: null
   - id: A17
     source: specs/chat-experience/spec.md
     text: 消息气泡支持头像、发送者元信息、现有议题标签和乐观发送；发送失败恢复状态并显示错误。
-    result: passed
-    reason:
-      text: Message cards include avatar, sender metadata and existing tags, while
-        optimistic send success/failure paths replace or recover the temporary
-        state and display errors.
-      truncated: false
+    result: pending
+    reason: null
   - id: A18
     source: specs/chat-experience/spec.md
     text: 保留 dsh-access 现有账号权限、消息 API、未读统计和移动端 safe-area/抽屉适配。
-    result: passed
-    reason:
-      text: Existing authenticated message APIs and account filtering remain in use,
-        database-reset transitions now call setUnread(0), and the chat CSS
-        retains mobile safe-area sizing and drawer-compatible overlay behavior.
-      truncated: false
+    result: pending
+    reason: null
   - id: A19
     source: specs/chat-experience/spec.md
     text: 触感反馈和动画仅作渐进增强，并遵守 `prefers-reduced-motion`。
-    result: passed
-    reason:
-      text: Haptics are feature-detected and skipped under prefers-reduced-motion; the
-        same media query disables launcher, backdrop, panel, and message
-        animations/transitions.
-      truncated: false
+    result: pending
+    reason: null
   - id: A20
     source: specs/cloudflared-download-hardening/spec.md
     text: 优先使用 PATH 与既有有效缓存；缓存缺失时，同一 home 的并发调用复用一次下载事务。
-    result: passed
-    reason:
-      text: ensureCloudflared validates PATH candidates first, falls through from
-        invalid PATH entries to verified cache candidates, and active same-home
-        callers share one downloads-map transaction.
-      truncated: false
+    result: pending
+    reason: null
   - id: A21
     source: specs/cloudflared-download-hardening/spec.md
     text: 每次下载有总超时并传播调用方取消；响应体流式写入唯一临时文件，不把完整二进制缓冲在内存。
-    result: failed
-    reason:
-      text: Response bytes are streamed rather than fully buffered, and caller waits
-        are cancellable, but cancellation/timeout is only passed to fetch. Tar
-        listing/extraction can run indefinitely after the 120-second deadline,
-        and validation/rename can continue after the last waiter aborts, so
-        timeout and caller cancellation are not propagated through the complete
-        download transaction.
-      truncated: false
+    result: pending
+    reason: null
   - id: A22
     source: specs/cloudflared-download-hardening/spec.md
     text: 下载顺序为 Cloudflare 官方源，其后为 `DSH_ACCESS_CLOUDFLARED_MIRRORS` 显式配置的 HTTPS
       镜像；不内置第三方代理，错误不回显完整 URL 或 query。
-    result: passed
-    reason:
-      text: cloudflaredDownloadUrls places the official Cloudflare release first,
-        admits only explicitly configured HTTPS mirrors afterward, and final
-        source failures use generic labels rather than URL, host, or query
-        details.
-      truncated: false
+    result: pending
+    reason: null
   - id: A23
     source: specs/cloudflared-download-hardening/spec.md
     text: 每个来源失败后清理半截文件；小于 1 MiB 的下载视为无效。
-    result: passed
-    reason:
-      text: Each source has a unique attempt directory removed in finally, stream
-        failures remove partial destination files, and payloads below 1 MiB are
-        rejected.
-      truncated: false
+    result: pending
+    reason: null
   - id: A24
     source: specs/cloudflared-download-hardening/spec.md
     text: tgz 只解压到隔离临时目录；候选文件须通过类型、权限和 `cloudflared --version` 验证。
-    result: passed
-    reason:
-      text: Archive names are checked for absolute, drive, backslash, and parent
-        traversal forms; extraction targets an isolated directory, and the
-        located candidate must be a regular executable that passes cloudflared
-        --version.
-      truncated: false
+    result: pending
+    reason: null
   - id: A25
     source: specs/cloudflared-download-hardening/spec.md
     text: 仅在全部验证通过后原子替换正式缓存；失败不得删除或破坏此前有效缓存。
-    result: passed
-    reason:
-      text: The canonical executable is never moved aside before validation; a staged,
-        fully probed candidate is renamed over it, while failed source attempts
-        and invalid candidates leave the prior cache path untouched.
-      truncated: false
+    result: pending
+    reason: null
   - id: A26
     source: specs/cloudflared-download-hardening/spec.md
     text: 不实现 Range 并发下载、动态 Homebrew bottle 发现、自动更新或独立公网 PIN。
-    result: passed
-    reason:
-      text: No Range downloader, dynamic Homebrew discovery, automatic updater,
-        independent public PIN, or built-in third-party proxy was introduced.
-      truncated: false
+    result: pending
+    reason: null
   - id: A27
     source: specs/dsh-rc7-compat/spec.md
     text: slot 注册提供新版要求的稳定 key，同时保持 rc.6 行为。
-    result: passed
-    reason:
-      text: Settings, account, mobile overlay, chat overlay, and token slot
-        registrations now carry stable keys while retaining their existing IDs
-        and registration behavior.
-      truncated: false
+    result: pending
+    reason: null
   - id: A28
     source: specs/dsh-rc7-compat/spec.md
     text: settings/whitelist 补丁探测 rc.6 的 `WEB_SETTINGS_NAMESPACES` 和 rc.7 移除该常量两种结构。
-    result: passed
-    reason:
-      text: Patch logic explicitly distinguishes an rc.6 host-apiproxy containing
-        WEB_SETTINGS_NAMESPACES from an rc.7 structure where that constant is
-        absent.
-      truncated: false
+    result: pending
+    reason: null
   - id: A29
     source: specs/dsh-rc7-compat/spec.md
     text: rc.7 缺少旧 namespace 白名单时，状态视为已满足而不是 missing。
-    result: passed
-    reason:
-      text: patchStatus treats absence of WEB_SETTINGS_NAMESPACES as native whitelist
-        satisfaction, and applyRemotePatch remains idempotent for the rc.7
-        fixture.
-      truncated: false
+    result: pending
+    reason: null
   - id: A30
     source: specs/dsh-rc7-compat/spec.md
     text: workspace 搜索粘滞态和自动填充补丁为可选补丁；目标文件不存在时不阻塞核心 host/settings 补丁。
-    result: passed
-    reason:
-      text: Workspace search/autofill modifications are conditional on the optional
-        client file and recognized source patterns; target absence reports
-        workspaceSearch satisfied without blocking settings or whitelist work.
-      truncated: false
+    result: pending
+    reason: null
   - id: A31
     source: specs/security-hardening/spec.md
     text: Gateway 与 Plugin 使用一致的 Cookie 解析：仅剥 ASCII space/tab，按第一个 `=`
       分割，名称精确匹配并保留值内其余 `=`；Unicode 空白不得参与认证。
-    result: passed
-    reason:
-      text: Gateway and Plugin import the same ASCII-OWS-only exact cookie parser,
-        preserving value suffixes after the first '=' and refusing
-        Unicode-whitespace cookie names.
-      truncated: false
+    result: pending
+    reason: null
   - id: A32
     source: specs/security-hardening/spec.md
     text: 登录门和代理分派前规范化并校验路径；编码、双编码、压平和未知 `/gateway` 变形路由必须 fail-closed，合法 Gateway
       API 与 3080 本机入口不变。
-    result: failed
-    reason:
-      text: "Gateway classification is still not fail-closed for every backslash
-        absolute-form variant: malformed authority forms such as
-        http:////x\\gateway\\..\\api/session.list and network-path
-        //x\\gateway\\..\\api/session.list lose the gateway claim in rawPathOf,
-        classify as upstream, and normalize downstream to /api/session.list."
-      truncated: false
+    result: pending
+    reason: null
   - id: A33
     source: specs/security-hardening/spec.md
     text: session history 与聊天写入在模型输入边界清洗隐藏 Unicode 和危险 HTML/CSS，保留正常文本、换行、比较符；文件
       `read/raw/download` 不改写。
-    result: failed
-    reason:
-      text: Model-facing chat and session history strings are sanitized and the known
-        raw/read plus upload/SSH download routes are protected, but GET
-        /api/session.export remains eligible for generic HTML rewriting despite
-        being documented in permissions.ts as a file-download surface.
-      truncated: false
+    result: pending
+    reason: null
   - id: A34
     source: specs/security-hardening/spec.md
     text: dsh-ssh 主机地址按 socket 语义识别 IPv4/IPv6、inet_aton 变体和 mapped/compatible
       IPv6；拒绝回环、私网、链路本地、未指定地址。hostname 解析失败或任一结果不安全时拒绝。
-    result: passed
-    reason:
-      text: Socket-form IPv4/IPv6 parsing rejects required unsafe ranges and
-        representations, DNS resolution fails closed if empty/failing or if any
-        answer is private, and the selected public address replaces the hostname
-        before forwarding.
-      truncated: false
+    result: pending
+    reason: null
   - id: A35
     source: specs/security-hardening/spec.md
     text: 任何响应过滤、净化或重压缩都必须清理失效的 Content-Length、Transfer-Encoding 与 Content-Encoding
       组合。
-    result: passed
-    reason:
-      text: HTML injection, session-history sanitation, authorization-response
-        filtering, and compression paths clear stale framing and
-        content-encoding metadata before emitting replacement bodies.
-      truncated: false
+    result: pending
+    reason: null
   - id: A36
     source: specs/security-hardening/spec.md
     text: session ownership、workspace 过滤、sandbox 降级和权限撤销复用
       `harden-multi-user-gateway`，仅补回归场景，不增加平行状态或授权路径。
-    result: passed
-    reason:
-      text: The change reuses the established ownership, workspace isolation, sandbox
-        downgrade, and revocation paths and adds no duplicate ownership state or
-        decision route.
-      truncated: false
+    result: pending
+    reason: null
   - id: A37
     source: specs/workspace-session-experience/spec.md
     text: workspace 搜索无匹配后点击外部可以收起并清空搜索状态。
-    result: passed
-    reason:
-      text: The workspace patch changes outside interaction so a completed nonempty
-        search with zero remote results clears the query and collapses the
-        search UI.
-      truncated: false
+    result: pending
+    reason: null
   - id: A38
     source: specs/workspace-session-experience/spec.md
     text: 会话搜索输入关闭浏览器账号和密码自动填充。
-    result: passed
-    reason:
-      text: 'The session search input receives autoComplete: "off" and the dedicated
-        noncredential name dsh-access-session-search.'
-      truncated: false
+    result: pending
+    reason: null
   - id: A39
     source: specs/workspace-session-experience/spec.md
     text: 聊天消息轮询在建立基线后使用 `since` 增量，同一时刻至多一个请求。
-    result: passed
-    reason:
-      text: Initial/rebuild polls use the full messages endpoint, established polls
-        use ?since=<lastSeenId>, and the inFlight guard permits at most one
-        request at a time.
-      truncated: false
+    result: pending
+    reason: null
   - id: A40
     source: specs/workspace-session-experience/spec.md
     text: 空数据库建立稳定基线；数据库重置或 ID 回退时只重新建立基线，不产生未读幻觉。
-    result: passed
-    reason:
-      text: Empty databases establish an initialized cursor-zero baseline; epoch or
-        latest-ID rollback schedules one full rebuild, replaces confirmed
-        history, counts no rebuild messages as unread, and now clears any old
-        unread badge.
-      truncated: false
+    result: pending
+    reason: null
   - id: A41
     source: specs/workspace-session-experience/spec.md
     text: 组件卸载后不得由迟到的轮询响应更新状态。
-    result: passed
-    reason:
-      text: Polling cleanup marks the effect disposed and clears its interval;
-        response parsing paths check disposed before state updates, and delayed
-        rebuild calls recheck disposed before starting.
-      truncated: false
-builder_handoff:
-  candidate_id: 7b58af57-adea-4bb1-8757-8511f30bb8ea
-  identity_provider: skill-coordinated
-  builder_execution_ref: skill-coordinated:builder:1d0ac52c-9324-4e92-b0ad-cc2f5393fe11
-  iteration: 5
-  summary:
-    text: "Closed iteration 4 edge cases: fail closed on raw backslash gateway
-      variants; preserve dsh-ssh download bytes; clear accumulated unread state
-      during database reset/rebuild; and prevent pre-aborted callers or
-      zero-waiter aborted singleflight transactions from starting or accepting
-      shared work. Added focused regressions."
-    truncated: false
-  addressed_acceptance_ids:
-    - A2
-    - A3
-    - A9
-    - A12
-    - A18
-    - A21
-    - A32
-    - A33
-    - A40
-  checks:
-    - name:
-        text: targeted regressions
-        truncated: false
-      result: passed
-      note:
-        text: 42/42
-        truncated: false
-    - name:
-        text: npm test
-        truncated: false
-      result: passed
-      note:
-        text: 175/175 on HEAD 93614eb
-        truncated: false
-    - name:
-        text: npm run build
-        truncated: false
-      result: passed
-      note:
-        text: succeeded
-        truncated: false
-    - name:
-        text: git diff --check and boundary scan
-        truncated: false
-      result: passed
-      note:
-        text: clean
-        truncated: false
-    - name:
-        text: package notice
-        truncated: false
-      result: passed
-      note:
-        text: notice included among 66 files
-        truncated: false
-  checks_truncated: false
-  known_limits:
-    - text: GitHub remains unreachable; upstream baselines are latest locally known.
-      truncated: false
-  known_limits_truncated: false
-  submitted_at: 2026-08-21T08:27:45.688Z
+    result: pending
+    reason: null
+builder_handoff: null
 blockers: []
-verification:
-  candidate_id: 7b58af57-adea-4bb1-8757-8511f30bb8ea
-  identity_provider: skill-coordinated
-  verifier_execution_ref: skill-coordinated:verifier:aa682e5d-4c36-44b0-90fc-d932bda642be
-  iteration: 5
-  attempt: 1
-  assurance: skill-coordinated
-  verdict: fail
-  checks:
-    - id: full-tests
-      name:
-        text: Full test suite
-        truncated: false
-      argv_display:
-        - text: test
-          truncated: false
-      argv_truncated: false
-      cwd_ref: .
-      status: passed
-      exit_code: 0
-      duration_ms: 20156
-    - id: production-build
-      name:
-        text: Production TypeScript and client build
-        truncated: false
-      argv_display:
-        - text: run
-          truncated: false
-        - text: build
-          truncated: false
-      argv_truncated: false
-      cwd_ref: .
-      status: passed
-      exit_code: 0
-      duration_ms: 11658
-    - id: diff-check
-      name:
-        text: Git diff whitespace validation
-        truncated: false
-      argv_display:
-        - text: diff
-          truncated: false
-        - text: --check
-          truncated: false
-        - text: main...HEAD
-          truncated: false
-      argv_truncated: false
-      cwd_ref: .
-      status: passed
-      exit_code: 0
-      duration_ms: 143
-    - id: scope-boundaries
-      name:
-        text: Forbidden capability boundary scan
-        truncated: false
-      argv_display:
-        - text: -lc
-          truncated: false
-        - text: set -o pipefail; if git diff main...HEAD -- .
-            ':!docs/comet/changes/sync-dsh-passwords-hardening/**' | rg -i
-            'session_owner|ghproxy\.net|gh\.ddlc\.top|gh-proxy\.com|range.*download|dynamic.*homebrew|public.*pin';
-            then echo 'forbidden capability marker found' >&2; exit 1; fi
-          truncated: false
-      argv_truncated: false
-      cwd_ref: .
-      status: passed
-      exit_code: 0
-      duration_ms: 245
-    - id: package-notice-v2
-      name:
-        text: Published package retains third-party notice
-        truncated: false
-      argv_display:
-        - text: -e
-          truncated: false
-        - text: const {execFileSync}=require('node:child_process');const
-            p=JSON.parse(execFileSync('npm',['pack','--dry-run','--json'],{encoding:'utf8'}))[0];if(!p.files.some(f=>f.path==='THIRD_PARTY_NOTICES.md'))process.exit(1);console.log('notice
-            included; files='+p.files.length)
-          truncated: false
-      argv_truncated: false
-      cwd_ref: .
-      status: passed
-      exit_code: 0
-      duration_ms: 2109
-  summary:
-    text: Candidate 93614eb repairs unread reset and the specific
-      pre-aborted/zero-waiter singleflight joins, but verification still fails.
-      Gateway path classification misses malformed/network-path backslash
-      absolute targets, session.export is not excluded from generic HTML
-      rewriting, and cloudflared cancellation/total timeout does not cover tar
-      extraction, validation, and final installation.
-    truncated: false
-  risks:
-    - text: The brief's live re-fetch of the referenced upstream baselines remains
-        unconfirmed because GitHub was unavailable.
-      truncated: false
-  risks_truncated: false
-  completed_at: 2026-08-21T08:37:23.249Z
+verification: null
 history:
   - goal_cycle: 1
     iteration: 1
@@ -742,6 +392,35 @@ history:
         cover tar extraction, validation, and final installation.
       truncated: false
     completed_at: 2026-08-21T08:37:23.249Z
+  - goal_cycle: 2
+    iteration: 6
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A12
+      - A21
+      - A32
+    summary:
+      text: Candidate 06bbf36 fixes session.export preservation and adds signal checks
+        around successful tar/probe/install execution, but verification still
+        fails. Encoded gateway claims in malformed/network-path targets can fall
+        through to upstream, and runTar can remain pending forever on child
+        spawn failure despite the advertised total deadline.
+      truncated: false
+    completed_at: 2026-08-21T08:50:23.952Z
+  - goal_cycle: 2
+    iteration: 6
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: "User explicitly instructed automatic continuation without further
+        questions; return to Build to repair the final two root causes: encoded
+        network-path gateway claims and tar spawn-error settlement under the
+        total deadline."
+      truncated: false
+    completed_at: 2026-08-21T08:50:43.295Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null
@@ -752,7 +431,7 @@ history_overflow:
     blocked: 0
     execution-error: 0
     recovery: 0
-verification_result: fail
-verification_report: verification.md
+verification_result: pending
+verification_report: null
 archived: false
 created_at: 2026-08-19T10:14:23.466Z

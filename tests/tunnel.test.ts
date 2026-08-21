@@ -221,6 +221,8 @@ test('archive extraction validation and installation all observe the shared dead
   assert.match(source, /extractTarGz\(downloaded, extracted, combined\)/);
   assert.match(source, /verifyDownloadedExecutable\(candidate, combined\)/);
   assert.match(source, /combined\.throwIfAborted\(\);\s*replaceExecutable\(candidate, executable\)/);
+  assert.match(source, /child\.once\('error'/);
+  assert.match(source, /child\.once\('close'/);
 });
 
 test('verified cache replacement does not move the canonical executable away first', () => {
