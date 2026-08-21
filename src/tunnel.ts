@@ -93,23 +93,28 @@ export function isSafeArchiveEntry(entry: string): boolean {
   return !entry.split('/').some((segment) => segment === '..');
 }
 
-async function runTar(args: string[]): Promise<string> {
+async function runTar(args: string[], signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted();
   const child = spawn('tar', args, { stdio: ['ignore', 'pipe', 'pipe'] });
   const stdout: Buffer[] = [];
   const stderr: Buffer[] = [];
+  const onAbort = () => { try { child.kill('SIGKILL'); } catch { /* already exited */ } };
+  signal.addEventListener('abort', onAbort, { once: true });
   child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
   child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
   await waitForProcess(child);
+  signal.removeEventListener('abort', onAbort);
+  signal.throwIfAborted();
   if (child.exitCode !== 0) throw new Error(`cloudflared archive failed: ${Buffer.concat(stderr).toString('utf8').trim()}`);
   return Buffer.concat(stdout).toString('utf8');
 }
 
-async function extractTarGz(archive: string, destination: string): Promise<void> {
-  const entries = (await runTar(['-tzf', archive])).split(/\r?\n/).filter(Boolean);
+async function extractTarGz(archive: string, destination: string, signal: AbortSignal): Promise<void> {
+  const entries = (await runTar(['-tzf', archive], signal)).split(/\r?\n/).filter(Boolean);
   if (entries.length === 0 || entries.some((entry) => !isSafeArchiveEntry(entry))) {
     throw new Error('cloudflared archive contains an unsafe entry');
   }
-  await runTar(['-xzf', archive, '-C', destination]);
+  await runTar(['-xzf', archive, '-C', destination], signal);
 }
 
 const MIN_CLOUDFLARED_BYTES = 1024 * 1024;
@@ -181,21 +186,26 @@ export function withCloudflaredDownload(
   return waitWithCallerCancellation(shared, signal);
 }
 
-async function verifyDownloadedExecutable(file: string): Promise<void> {
+async function verifyDownloadedExecutable(file: string, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
   if (!isExecutableFile(file)) throw new Error('cloudflared download did not produce an executable file');
   const child = spawn(file, ['--version'], { stdio: 'ignore' });
   const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    const onAbort = () => { try { child.kill('SIGKILL'); } catch { /* already exited */ } };
+    signal?.addEventListener('abort', onAbort, { once: true });
     const timer = setTimeout(() => {
       try { child.kill('SIGKILL'); } catch { /* already exited */ }
       reject(new Error('cloudflared executable probe timed out'));
     }, 5000);
     timer.unref();
     child.once('error', reject);
-    child.once('exit', (code, signal) => {
+    child.once('exit', (code, exitSignal) => {
       clearTimeout(timer);
-      resolve({ code, signal });
+      signal?.removeEventListener('abort', onAbort);
+      resolve({ code, signal: exitSignal });
     });
   });
+  signal?.throwIfAborted();
   if (result.code !== 0 || result.signal !== null) {
     throw new Error('cloudflared executable probe failed');
   }
@@ -283,12 +293,13 @@ async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promis
         if (asset.archive) {
           const extracted = join(attempt, 'extracted');
           mkdirSync(extracted, { recursive: true, mode: 0o700 });
-          await extractTarGz(downloaded, extracted);
+          await extractTarGz(downloaded, extracted, combined);
           candidate = findExtractedBinary(extracted) ?? '';
           if (!candidate) throw new Error('cloudflared binary not found after extraction');
         }
         if (process.platform !== 'win32') chmodSync(candidate, 0o700);
-        await verifyDownloadedExecutable(candidate);
+        await verifyDownloadedExecutable(candidate, combined);
+        combined.throwIfAborted();
         replaceExecutable(candidate, executable);
         return executable;
       } catch (error) {

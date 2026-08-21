@@ -22,6 +22,8 @@ test('encoded and flattened gateway paths fail closed', () => {
     'http://example.test/gateway/../api/session.list',
     'http://example.test\\gateway\\..\\api/session.list',
     '/gateway\\..\\api/session.list',
+    'http:////x\\gateway\\..\\api/session.list',
+    '//x\\gateway\\..\\api/session.list',
   ]) assert.equal(classifyGatewayRequestTarget('GET', path), 'reject', path);
 });
 

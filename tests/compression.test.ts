@@ -47,6 +47,7 @@ test('raw and download file responses remain byte faithful even when they contai
   assert.equal(shouldRewriteHtmlResponse('GET', '/aionui-panel/raw', 'text/html'), false);
   assert.equal(shouldRewriteHtmlResponse('GET', '/api/dsh-uploads/download', 'text/html'), false);
   assert.equal(shouldRewriteHtmlResponse('GET', '/api/dsh-ssh/download', 'text/html'), false);
+  assert.equal(shouldRewriteHtmlResponse('GET', '/api/session.export', 'text/html'), false);
   assert.equal(shouldRewriteHtmlResponse('GET', '/', 'text/html'), true);
 });
 

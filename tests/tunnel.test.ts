@@ -216,6 +216,13 @@ test('a pre-aborted first caller does not start a shared transaction', async () 
   assert.equal(calls, 0);
 });
 
+test('archive extraction validation and installation all observe the shared deadline signal', () => {
+  const source = readFileSync(new URL('../src/tunnel.ts', import.meta.url), 'utf8');
+  assert.match(source, /extractTarGz\(downloaded, extracted, combined\)/);
+  assert.match(source, /verifyDownloadedExecutable\(candidate, combined\)/);
+  assert.match(source, /combined\.throwIfAborted\(\);\s*replaceExecutable\(candidate, executable\)/);
+});
+
 test('verified cache replacement does not move the canonical executable away first', () => {
   const tunnelSource = readFileSync(new URL('../src/tunnel.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(tunnelSource, /renameSync\(executable, backup\)/);
