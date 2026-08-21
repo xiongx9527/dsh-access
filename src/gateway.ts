@@ -49,6 +49,7 @@ import { classifyGatewayRequest } from './request-policy.js';
 import { UserConnectionRegistry } from './connection-registry.js';
 import { authorizeFilesystemPath } from './path-policy.js';
 import { markGatewayProxyHeaders } from './local-access.js';
+import { readCookie } from './cookie.js';
 
 /** 网关内部扩展请求：权限执行时把用户/权限附在 req 上，供后续中间件与代理读取 */
 type Req = Request & {
@@ -122,23 +123,6 @@ const INJECT_SCRIPT = `<script>
   window.addEventListener('pagehide', function () { window.clearInterval(poll); });
 })();
 </script>`;
-
-function readCookie(cookieHeader: string | undefined, name: string): string | null {
-  if (!cookieHeader) return null;
-  for (const part of cookieHeader.split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name && rest.length > 0) {
-      const raw = rest.join('=');
-      try {
-        return decodeURIComponent(raw);
-      } catch {
-        // 畸形百分号编码（如 %zz）：返回原值，JWT 校验自然失败，不抛 URIError 500
-        return raw;
-      }
-    }
-  }
-  return null;
-}
 
 /**
  * 防开放重定向：next 只允许站内路径。

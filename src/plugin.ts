@@ -32,6 +32,7 @@ import {
   isDirectLocalPluginRequest,
   resolvePluginCaller,
 } from './local-access.js';
+import { readCookie } from './cookie.js';
 
 
 export interface RemoteAccessPortController {
@@ -66,22 +67,6 @@ export const inject = ['webServer'];
 const COOKIE_NAME = 'dsh_gateway_token';
 /** 请求体上限（用户管理 JSON 都很小） */
 const MAX_BODY = 4096;
-
-function readCookie(cookieHeader: string | undefined, cookieName: string): string | null {
-  if (!cookieHeader) return null;
-  for (const part of cookieHeader.split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === cookieName && rest.length > 0) {
-      const raw = rest.join('=');
-      try {
-        return decodeURIComponent(raw);
-      } catch {
-        return raw;
-      }
-    }
-  }
-  return null;
-}
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body);
