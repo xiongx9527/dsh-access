@@ -567,6 +567,7 @@ export function createGatewayServer(
   hooks: GatewayHooks = {},
 ): http.Server {
   const app = express();
+  const chatEpoch = randomBytes(12).toString('hex');
   // 不泄露框架信息
   app.disable('x-powered-by');
   // 保留 /gateway 命名空间：编码/压平变形与未知自有路由不得落入上游 SPA fallback。
@@ -1674,7 +1675,7 @@ export function createGatewayServer(
     const latestId = db.listMessages(300)
       .filter((m) => m.recipient_id === null || m.recipient_id === me.userId || m.sender_id === me.userId)
       .reduce((max, message) => Math.max(max, message.id), 0);
-    res.json({ ok: true, me: { id: me.userId, username: me.username, role: me.role }, messages: visible, latestId });
+    res.json({ ok: true, me: { id: me.userId, username: me.username, role: me.role }, messages: visible, latestId, epoch: chatEpoch });
   });
 
   // ── 发送留言（所有登录用户） ─────────────────────────────────

@@ -29,9 +29,7 @@ function executableName(): string {
 }
 
 function executableOnPath(): string | null {
-  const names = process.platform === 'win32'
-    ? [executableName(), 'cloudflared.cmd']
-    : [executableName()];
+  const names = [executableName()];
   for (const directory of (process.env.PATH ?? '').split(delimiter)) {
     if (!directory) continue;
     for (const name of names) {
@@ -142,6 +140,30 @@ async function verifyDownloadedExecutable(file: string): Promise<void> {
   }
 }
 
+function findExtractedBinary(directoryPath: string): string | null {
+  for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
+    const child = join(directoryPath, entry.name);
+    if (entry.isDirectory()) {
+      const nested = findExtractedBinary(child);
+      if (nested) return nested;
+    } else if (entry.isFile() && entry.name === executableName()) return child;
+  }
+  return null;
+}
+
+function replaceExecutable(candidate: string, executable: string): void {
+  const backup = `${executable}.replace-backup-${process.pid}-${Date.now()}`;
+  const hadExisting = existsSync(executable);
+  try {
+    if (hadExisting) renameSync(executable, backup);
+    renameSync(candidate, executable);
+    rmSync(backup, { force: true });
+  } catch (error) {
+    if (!existsSync(executable) && existsSync(backup)) renameSync(backup, executable);
+    throw error;
+  }
+}
+
 async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promise<string> {
   const directory = join(home, 'remote-access', 'bin');
   const executable = join(directory, executableName());
@@ -153,9 +175,17 @@ async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promis
   // stale cached binary from an older dsh-access run.
   const fromPath = executableOnPath();
   if (fromPath) {
-    copyFileSync(fromPath, executable);
-    if (process.platform !== 'win32') chmodSync(executable, 0o700);
-    return executable;
+    await verifyDownloadedExecutable(fromPath);
+    const staged = join(directory, `.cloudflared-path-${process.pid}-${Date.now()}`);
+    try {
+      copyFileSync(fromPath, staged);
+      if (process.platform !== 'win32') chmodSync(staged, 0o700);
+      await verifyDownloadedExecutable(staged);
+      replaceExecutable(staged, executable);
+      return executable;
+    } finally {
+      rmSync(staged, { force: true });
+    }
   }
 
   const cachedCandidates = [
@@ -164,60 +194,55 @@ async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promis
     join(directory, assetName),
   ];
   for (const candidate of cachedCandidates) {
-    if (isExecutableFile(candidate) && !candidate.endsWith('.tgz')) {
+    if (!isExecutableFile(candidate) || candidate.endsWith('.tgz')) continue;
+    try {
+      await verifyDownloadedExecutable(candidate);
       if (candidate !== executable) {
-        copyFileSync(candidate, executable);
-        if (process.platform !== 'win32') chmodSync(executable, 0o700);
+        const staged = join(directory, `.cloudflared-cache-${process.pid}-${Date.now()}`);
+        copyFileSync(candidate, staged);
+        if (process.platform !== 'win32') chmodSync(staged, 0o700);
+        await verifyDownloadedExecutable(staged);
+        replaceExecutable(staged, executable);
       }
       return executable;
+    } catch {
+      // Invalid cache is left in place until a fully verified replacement is ready.
     }
   }
 
   const transaction = mkdtempSync(join(directory, '.cloudflared-install-'));
-  const downloaded = join(transaction, asset.name);
   const failures: string[] = [];
-  let downloadedOk = false;
+  const deadline = AbortSignal.timeout(120_000);
+  const combined = signal ? AbortSignal.any([signal, deadline]) : deadline;
   try {
     for (const [index, url] of cloudflaredDownloadUrls(asset.name).entries()) {
       const sourceLabel = index === 0 ? 'official release' : `configured mirror ${index}`;
+      const attempt = mkdtempSync(join(transaction, 'source-'));
       try {
-        const timeout = AbortSignal.timeout(120_000);
-        const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+        combined.throwIfAborted();
+        const downloaded = join(attempt, asset.name);
         const response = await fetch(url, { redirect: 'follow', signal: combined });
         await streamDownloadToFile(response, downloaded);
-        downloadedOk = true;
-        break;
-      } catch {
-        rmSync(downloaded, { force: true });
-        failures.push(`${sourceLabel}: download failed`);
+        let candidate = downloaded;
+        if (asset.archive) {
+          const extracted = join(attempt, 'extracted');
+          mkdirSync(extracted, { recursive: true, mode: 0o700 });
+          await extractTarGz(downloaded, extracted);
+          candidate = findExtractedBinary(extracted) ?? '';
+          if (!candidate) throw new Error('cloudflared binary not found after extraction');
+        }
+        if (process.platform !== 'win32') chmodSync(candidate, 0o700);
+        await verifyDownloadedExecutable(candidate);
+        replaceExecutable(candidate, executable);
+        return executable;
+      } catch (error) {
+        if (combined.aborted) throw combined.reason ?? error;
+        failures.push(`${sourceLabel}: download or validation failed`);
+      } finally {
+        rmSync(attempt, { recursive: true, force: true });
       }
     }
-    if (!downloadedOk) {
-      throw new Error(`cloudflared download failed; try another mirror or install cloudflared on PATH (${failures.join('; ')})`);
-    }
-
-    let candidate = downloaded;
-    if (asset.archive) {
-      const extracted = join(transaction, 'extracted');
-      mkdirSync(extracted, { recursive: true, mode: 0o700 });
-      await extractTarGz(downloaded, extracted);
-      const findBinary = (directoryPath: string): string | null => {
-        for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
-          const child = join(directoryPath, entry.name);
-          if (entry.isDirectory()) {
-            const nested = findBinary(child);
-            if (nested) return nested;
-          } else if (entry.isFile() && entry.name === executableName()) return child;
-        }
-        return null;
-      };
-      candidate = findBinary(extracted) ?? '';
-      if (!candidate) throw new Error('cloudflared binary not found after extraction');
-    }
-    if (process.platform !== 'win32') chmodSync(candidate, 0o700);
-    await verifyDownloadedExecutable(candidate);
-    renameSync(candidate, executable);
-    return executable;
+    throw new Error(`cloudflared download failed; try another mirror or install cloudflared on PATH (${failures.join('; ')})`);
   } finally {
     rmSync(transaction, { recursive: true, force: true });
   }
@@ -229,14 +254,14 @@ export function ensureCloudflared(home: string, signal?: AbortSignal): Promise<s
 
 export interface CloudflaredTunnelOptions {
   home: string;
-  ensureExecutable?: (home: string) => Promise<string>;
+  ensureExecutable?: (home: string, signal: AbortSignal) => Promise<string>;
   spawnProcess?: typeof spawn;
   now?: () => number;
 }
 
 export class CloudflaredTunnel implements TunnelController {
   private readonly home: string;
-  private readonly ensureExecutable: (home: string) => Promise<string>;
+  private readonly ensureExecutable: (home: string, signal: AbortSignal) => Promise<string>;
   private readonly spawnProcess: typeof spawn;
   private readonly now: () => number;
   private state: TunnelSnapshot = { phase: 'idle', detail: '', url: null, startedAt: null };
@@ -244,6 +269,7 @@ export class CloudflaredTunnel implements TunnelController {
   private startPromise: Promise<TunnelSnapshot> | null = null;
   private expectedStop = false;
   private generation = 0;
+  private preparationAbort: AbortController | null = null;
 
   constructor(options: CloudflaredTunnelOptions) {
     this.home = options.home;
@@ -266,7 +292,11 @@ export class CloudflaredTunnel implements TunnelController {
   private async startOnce(targetUrl: string, generation: number): Promise<TunnelSnapshot> {
     await this.terminateChild();
     try {
-      const executable = await this.ensureExecutable(this.home);
+      const preparationAbort = new AbortController();
+      this.preparationAbort?.abort(new Error('cloudflared start superseded'));
+      this.preparationAbort = preparationAbort;
+      const executable = await this.ensureExecutable(this.home, preparationAbort.signal);
+      if (this.preparationAbort === preparationAbort) this.preparationAbort = null;
       if (generation !== this.generation) throw new Error('cloudflared start cancelled');
       this.state = { phase: 'starting', detail: '', url: null, startedAt: null };
       this.expectedStop = false;
@@ -348,6 +378,8 @@ export class CloudflaredTunnel implements TunnelController {
 
   async stop(): Promise<TunnelSnapshot> {
     this.generation += 1;
+    this.preparationAbort?.abort(new Error('cloudflared start cancelled'));
+    this.preparationAbort = null;
     if (!this.child && !this.startPromise) {
       this.state = { phase: 'idle', detail: '', url: null, startedAt: null };
       return this.snapshot();

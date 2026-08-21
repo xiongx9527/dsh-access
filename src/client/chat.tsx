@@ -71,7 +71,7 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   const draggedRef = useRef(false);
   const lastSeenId = useRef(0);
   const openRef = useRef(false);
-  const pollStateRef = useRef<ChatPollState>({ initialized: false, lastSeenId: 0, rebuilding: false });
+  const pollStateRef = useRef<ChatPollState>({ initialized: false, lastSeenId: 0, rebuilding: false, epoch: null });
 
   useEffect(() => {
     let active = true;
@@ -125,7 +125,8 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
             setMe(nextMe);
             const latestId = Number.isSafeInteger(d.latestId) && d.latestId >= 0 ? d.latestId : 0;
             if (nextMe) {
-              const transition = nextChatPollState(pollStateRef.current, incoming, latestId, nextMe.id, openRef.current);
+              const epoch = typeof d.epoch === 'string' ? d.epoch : '';
+              const transition = nextChatPollState(pollStateRef.current, incoming, latestId, epoch, nextMe.id, openRef.current);
               pollStateRef.current = transition.state;
               lastSeenId.current = transition.state.lastSeenId;
               if (transition.unread > 0) setUnread((count) => count + transition.unread);

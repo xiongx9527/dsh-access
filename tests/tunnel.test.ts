@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ensureCloudflared, extractTryCloudflareUrl, cloudflaredDownloadUrls, releaseAsset, streamDownloadToFile, withCloudflaredDownload } from '../src/tunnel.js';
 
+const FAKE_CLOUDFLARED = process.platform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n';
+
 test('extractTryCloudflareUrl accepts only trycloudflare HTTPS URLs', () => {
   assert.equal(
     extractTryCloudflareUrl('INF Your quick Tunnel has been created! Visit it at https://quiet-river-92.trycloudflare.com'),
@@ -34,13 +36,13 @@ test('ensureCloudflared accepts a platform asset-name cache file', async () => {
   mkdirSync(directory, { recursive: true });
   const asset = releaseAsset().name.replace(/\.tgz$/i, '');
   const source = join(directory, asset);
-  writeFileSync(source, 'cached-asset');
+  writeFileSync(source, FAKE_CLOUDFLARED);
   if (process.platform !== 'win32') chmodSync(source, 0o700);
   const previous = process.env.PATH;
   process.env.PATH = '';
   try {
     const resolved = await ensureCloudflared(root);
-    assert.equal(readFileSync(resolved, 'utf8'), 'cached-asset');
+    assert.equal(readFileSync(resolved, 'utf8'), FAKE_CLOUDFLARED);
   } finally {
     process.env.PATH = previous;
   }
@@ -53,15 +55,15 @@ test('ensureCloudflared prefers an explicit PATH binary over a stale cache', asy
   mkdirSync(cacheDir, { recursive: true });
   mkdirSync(pathDir, { recursive: true });
   const asset = releaseAsset().name.replace(/\.tgz$/i, '');
-  writeFileSync(join(cacheDir, asset), 'stale-cache');
+  writeFileSync(join(cacheDir, asset), FAKE_CLOUDFLARED);
   const pathBinary = join(pathDir, process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');
-  writeFileSync(pathBinary, 'explicit-path');
+  writeFileSync(pathBinary, FAKE_CLOUDFLARED);
   if (process.platform !== 'win32') chmodSync(pathBinary, 0o700);
   const previous = process.env.PATH;
   process.env.PATH = pathDir;
   try {
     const resolved = await ensureCloudflared(root);
-    assert.equal(readFileSync(resolved, 'utf8'), 'explicit-path');
+    assert.equal(readFileSync(resolved, 'utf8'), FAKE_CLOUDFLARED);
   } finally {
     process.env.PATH = previous;
   }
@@ -159,20 +161,22 @@ test('concurrent tunnel starts share one cloudflared process and stop clears pub
   assert.equal(stopped.url, null);
 });
 
-test('stopping during cloudflared preparation cancels the pending launch', async () => {
-  let release!: (value: string) => void;
-  const executable = new Promise<string>((resolve) => { release = resolve; });
+test('stopping during cloudflared preparation aborts the pending download', async () => {
+  let observedSignal: AbortSignal | null = null;
   let spawns = 0;
   const tunnel = new CloudflaredTunnel({
     home: '/tmp/dsh-access-tunnel-cancel',
-    ensureExecutable: async () => executable,
+    ensureExecutable: async (_home, signal) => {
+      observedSignal = signal;
+      return new Promise<string>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+    },
     spawnProcess: (() => { spawns += 1; return new FakeChild(); }) as never,
   });
   const starting = tunnel.start('http://127.0.0.1:3088');
   await new Promise((resolve) => setTimeout(resolve, 0));
   await tunnel.stop();
-  release('/fake/cloudflared');
-  await assert.rejects(starting, /cancelled/);
+  await assert.rejects(starting);
+  assert.equal(observedSignal?.aborted, true);
   assert.equal(spawns, 0);
   assert.equal(tunnel.snapshot().phase, 'idle');
 });
@@ -189,14 +193,14 @@ test('ensureCloudflared copies a PATH binary into the Access management data dir
   mkdirSync(pathDir, { recursive: true });
   const name = process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared';
   const source = join(pathDir, name);
-  writeFileSync(source, 'fake-cloudflared');
+  writeFileSync(source, FAKE_CLOUDFLARED);
   if (process.platform !== 'win32') chmodSync(source, 0o700);
   const previous = process.env.PATH;
   process.env.PATH = pathDir;
   try {
     const resolved = await ensureCloudflared(home);
     assert.equal(resolved, join(home, 'remote-access', 'bin', name));
-    assert.equal(readFileSync(resolved, 'utf8'), 'fake-cloudflared');
+    assert.equal(readFileSync(resolved, 'utf8'), FAKE_CLOUDFLARED);
   } finally {
     process.env.PATH = previous;
   }
