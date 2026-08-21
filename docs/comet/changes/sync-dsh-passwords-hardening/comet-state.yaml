@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 31
+state_version: 35
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,11 +29,11 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 8
+  iteration: 9
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 6
-  no_progress_count: 0
+  failed_iteration_count: 7
+  no_progress_count: 1
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
@@ -446,6 +446,33 @@ history:
         7.
       truncated: false
     completed_at: 2026-08-21T09:15:22.643Z
+  - goal_cycle: 2
+    iteration: 8
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A32
+    summary:
+      text: "Fail: all non-path criteria and runtime gates pass, but A2/A32 remain
+        unresolved. The classifier fixes the reported mixed malformed examples
+        and query/fragment confusion, yet still permits case-obscured,
+        malformed-suffix, and non-HTTP absolute gateway-derived targets to
+        normalize into upstream API paths, while also introducing an arbitrary
+        deep-encoding false positive."
+      truncated: false
+    completed_at: 2026-08-21T09:30:40.172Z
+  - goal_cycle: 2
+    iteration: 8
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: User authorized automatic multi-agent continuation; repair the remaining
+        case, malformed-suffix, unsupported-scheme, and deep-encoding classifier
+        variants.
+      truncated: false
+    completed_at: 2026-08-21T09:30:42.104Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null

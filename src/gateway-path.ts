@@ -26,36 +26,42 @@ function rawPathOf(requestTarget: string): string {
   return requestTarget.split(/[?#]/, 1)[0] || '/';
 }
 
-function decodeAsciiEscapes(rawPath: string): { decoded: string; exhausted: boolean } {
+function decodeAsciiEscapes(rawPath: string): string {
   let decoded = rawPath;
-  for (let index = 0; index < 16; index += 1) {
+  // Every successful round removes at least one '%' from a nested escape, so input length
+  // is a natural bound without rejecting benign paths at an arbitrary decoding depth.
+  for (let index = 0; index <= rawPath.length; index += 1) {
     const next = decoded.replace(/%([0-7][0-9a-f])/gi, (_escape, hex: string) =>
       String.fromCharCode(Number.parseInt(hex, 16)));
-    if (next === decoded) return { decoded, exhausted: false };
+    if (next === decoded) return decoded;
     decoded = next;
   }
-  return { decoded, exhausted: /%([0-7][0-9a-f])/i.test(decoded) };
+  return decoded;
 }
 
 /** Keep the reserved /gateway namespace out of the upstream SPA fallback. */
 export function classifyGatewayRequestTarget(method: string, requestTarget: string): GatewayPathClass {
   // Only origin-form and well-formed HTTP absolute-form targets are supported. WHATWG treats
   // backslashes and extra leading slashes as separators, so forwarding those is ambiguous.
-  if (requestTarget.includes('\\') || requestTarget.startsWith('//') || /^https?:\/{3,}/i.test(requestTarget)) {
-    return 'reject';
-  }
+  if (
+    requestTarget.includes('\\') ||
+    requestTarget.startsWith('//') ||
+    /^https?:\/{3,}/i.test(requestTarget) ||
+    (/^[a-z][a-z0-9+.-]*:\/\//i.test(requestTarget) && !/^https?:\/\//i.test(requestTarget))
+  ) return 'reject';
   const rawPath = rawPathOf(requestTarget);
-  const { decoded, exhausted } = decodeAsciiEscapes(rawPath);
-  if (exhausted || decoded.includes('\\')) return 'reject';
-  const rawClaimsGateway = /^\/gateway(?:\/|$)/.test(rawPath);
-  const decodedClaimsGateway = /^\/gateway(?:\/|$)/.test(decoded);
+  const decoded = decodeAsciiEscapes(rawPath);
+  if (decoded.includes('\\')) return 'reject';
+  const rawClaimsGateway = /^\/gateway(?:\/|$|%)/i.test(rawPath);
+  const decodedClaimsGateway = /^\/gateway(?:\/|$|%)/i.test(decoded);
   let normalized: string;
   try {
     normalized = new URL(decoded.replace(/\/+/g, '/'), 'http://localhost').pathname;
   } catch {
     return rawClaimsGateway || decodedClaimsGateway ? 'reject' : 'upstream';
   }
-  const normalizedClaimsGateway = normalized === '/gateway' || normalized.startsWith('/gateway/');
+  const normalizedLower = normalized.toLowerCase();
+  const normalizedClaimsGateway = normalizedLower === '/gateway' || normalizedLower.startsWith('/gateway/');
   if (!rawClaimsGateway && !decodedClaimsGateway && !normalizedClaimsGateway) return 'upstream';
   if (rawPath !== normalized) return 'reject';
   const upperMethod = method.toUpperCase();

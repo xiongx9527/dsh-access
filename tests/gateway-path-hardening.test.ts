@@ -31,6 +31,10 @@ test('encoded and flattened gateway paths fail closed', () => {
     '//x/%2567ateway/%zz/../../api/session.list',
     '//x/%67ateway/%E0%A4%A/../../api/session.list',
     '/%2525252567ateway/../api/session.list',
+    '/Gateway/../api/session.list',
+    '/Gateway/anything',
+    '/gateway%zz/../api/session.list',
+    'ftp://evil/gateway/../api/session.list',
   ]) assert.equal(classifyGatewayRequestTarget('GET', path), 'reject', path);
 });
 
@@ -39,6 +43,7 @@ test('absolute-form query and fragment slashes do not become the request pathnam
   assert.equal(classifyGatewayRequestTarget('GET', 'http://example.test#next=/gateway/login'), 'upstream');
   assert.equal(classifyGatewayRequestTarget('GET', '/api/foo%zz'), 'upstream');
   assert.equal(classifyGatewayRequestTarget('GET', '/api/%E0%A4%A'), 'upstream');
+  assert.equal(classifyGatewayRequestTarget('GET', '/api/%2525252525252525252525252525252566oo'), 'upstream');
 });
 
 test('unknown canonical gateway routes cannot fall through to the upstream SPA', () => {
