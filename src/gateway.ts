@@ -51,7 +51,7 @@ import { UserConnectionRegistry } from './connection-registry.js';
 import { authorizeFilesystemPath } from './path-policy.js';
 import { markGatewayProxyHeaders } from './local-access.js';
 import { readCookie } from './cookie.js';
-import { classifyGatewayPath } from './gateway-path.js';
+import { classifyGatewayRequestTarget } from './gateway-path.js';
 import { sanitizeJsonStrings, sanitizeText } from './content-sanitization.js';
 import { sshHostRequestAllowed } from './ssrf-policy.js';
 
@@ -571,7 +571,7 @@ export function createGatewayServer(
   app.disable('x-powered-by');
   // 保留 /gateway 命名空间：编码/压平变形与未知自有路由不得落入上游 SPA fallback。
   app.use((req, res, next) => {
-    if (classifyGatewayPath(req.url ?? '/') === 'reject') {
+    if (classifyGatewayRequestTarget(req.method, req.url ?? '/') === 'reject') {
       res.status(404).type('text/plain').send('404 Not Found');
       return;
     }
@@ -2389,7 +2389,7 @@ export function createGatewayServer(
   // ── WebSocket 升级代理（dsh 前端依赖 WS 通信） ──────────────
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-    if (classifyGatewayPath(req.url ?? '/') !== 'upstream') {
+    if (classifyGatewayRequestTarget(req.method ?? 'GET', req.url ?? '/') !== 'upstream') {
       socket.destroy();
       return;
     }

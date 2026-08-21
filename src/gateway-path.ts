@@ -1,12 +1,19 @@
 export type GatewayPathClass = 'gateway' | 'upstream' | 'reject';
 
-const GATEWAY_ROUTES = [
-  /^\/gateway\/(login|setup|logout)\/?$/,
-  /^\/gateway\/api\/(me|logout|directories|overview|permissions|chat-settings)\/?$/,
-  /^\/gateway\/api\/users(?:\/[^/]+)?\/?$/,
-  /^\/gateway\/api\/usage\/report\/?$/,
-  /^\/gateway\/api\/messages(?:\/stream)?\/?$/,
-  /^\/gateway\/internal\/(health|patch|revoke-user)\/?$/,
+type Route = { methods: readonly string[]; path: RegExp };
+const GATEWAY_ROUTES: readonly Route[] = [
+  { methods: ['GET', 'POST'], path: /^\/gateway\/login\/?$/ },
+  { methods: ['POST'], path: /^\/gateway\/setup\/?$/ },
+  { methods: ['GET'], path: /^\/gateway\/logout\/?$/ },
+  { methods: ['GET'], path: /^\/gateway\/api\/(me|directories|overview|chat-settings)\/?$/ },
+  { methods: ['POST'], path: /^\/gateway\/api\/(logout|permissions|chat-settings)\/?$/ },
+  { methods: ['GET', 'POST'], path: /^\/gateway\/api\/messages\/?$/ },
+  { methods: ['GET'], path: /^\/gateway\/api\/messages\/stream\/?$/ },
+  { methods: ['POST'], path: /^\/gateway\/api\/users\/?$/ },
+  { methods: ['DELETE'], path: /^\/gateway\/api\/users\/[^/]+\/?$/ },
+  { methods: ['POST'], path: /^\/gateway\/api\/usage\/report\/?$/ },
+  { methods: ['GET'], path: /^\/gateway\/internal\/health\/?$/ },
+  { methods: ['POST'], path: /^\/gateway\/internal\/(patch|revoke-user)\/?$/ },
 ];
 
 function rawPathOf(requestTarget: string): string {
@@ -31,7 +38,7 @@ function decodePath(rawPath: string): { decoded: string; malformed: boolean } {
 }
 
 /** Keep the reserved /gateway namespace out of the upstream SPA fallback. */
-export function classifyGatewayPath(requestTarget: string): GatewayPathClass {
+export function classifyGatewayRequestTarget(method: string, requestTarget: string): GatewayPathClass {
   const rawPath = rawPathOf(requestTarget);
   const { decoded, malformed } = decodePath(rawPath);
   const rawClaimsGateway = /^\/gateway(?:\/|$)/.test(rawPath);
@@ -45,5 +52,8 @@ export function classifyGatewayPath(requestTarget: string): GatewayPathClass {
   const normalizedClaimsGateway = normalized === '/gateway' || normalized.startsWith('/gateway/');
   if (!rawClaimsGateway && !decodedClaimsGateway && !normalizedClaimsGateway) return 'upstream';
   if (malformed || rawPath !== normalized) return 'reject';
-  return GATEWAY_ROUTES.some((route) => route.test(normalized)) ? 'gateway' : 'reject';
+  const upperMethod = method.toUpperCase();
+  return GATEWAY_ROUTES.some((route) => route.methods.includes(upperMethod) && route.path.test(normalized))
+    ? 'gateway'
+    : 'reject';
 }

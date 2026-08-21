@@ -1,36 +1,39 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { classifyGatewayPath } from '../src/gateway-path.js';
+import { classifyGatewayRequestTarget } from '../src/gateway-path.js';
 
-test('canonical dsh-access gateway routes remain available', () => {
+test('canonical dsh-access gateway routes remain available for owned methods', () => {
   for (const path of [
-    '/gateway/login', '/gateway/setup', '/gateway/logout',
-    '/gateway/api/me', '/gateway/api/users/42', '/gateway/api/messages/stream',
-    '/gateway/internal/health',
-  ]) assert.equal(classifyGatewayPath(path), 'gateway');
-  assert.equal(classifyGatewayPath('/api/session.list'), 'upstream');
+    '/gateway/login', '/gateway/logout', '/gateway/api/me',
+    '/gateway/api/messages/stream', '/gateway/internal/health',
+  ]) assert.equal(classifyGatewayRequestTarget('GET', path), 'gateway');
+  assert.equal(classifyGatewayRequestTarget('POST', '/gateway/setup'), 'gateway');
+  assert.equal(classifyGatewayRequestTarget('POST', '/gateway/api/messages'), 'gateway');
+  assert.equal(classifyGatewayRequestTarget('DELETE', '/gateway/api/users/42'), 'gateway');
+  assert.equal(classifyGatewayRequestTarget('GET', '/api/session.list'), 'upstream');
 });
 
 test('encoded and flattened gateway paths fail closed', () => {
   for (const path of [
-    '/gateway%2Fapi%2Fme',
-    '/gateway%252Fapi%252Fme',
-    '/gateway//api/me',
-    '/gateway/..%2Fapi/session.list',
-    '/%67ateway/api/me',
+    '/gateway%2Fapi%2Fme', '/gateway%252Fapi%252Fme', '/gateway//api/me',
+    '/gateway/..%2Fapi/session.list', '/%67ateway/api/me',
     'http://example.test/gateway%2Flogin?next=x',
-  ]) assert.equal(classifyGatewayPath(path), 'reject', path);
+  ]) assert.equal(classifyGatewayRequestTarget('GET', path), 'reject', path);
 });
 
 test('unknown canonical gateway routes cannot fall through to the upstream SPA', () => {
   for (const path of [
-    '/gateway/api/dsh-ssh/hosts',
-    '/gateway/api/not-a-route',
-    '/gateway/internal/not-a-route',
-    '/gateway/anything',
-  ]) assert.equal(classifyGatewayPath(path), 'reject', path);
+    '/gateway/api/dsh-ssh/hosts', '/gateway/api/not-a-route',
+    '/gateway/internal/not-a-route', '/gateway/anything',
+  ]) assert.equal(classifyGatewayRequestTarget('GET', path), 'reject', path);
 });
 
 test('malformed request targets fail closed when they claim the gateway namespace', () => {
-  assert.equal(classifyGatewayPath('/gateway/%zz'), 'reject');
+  assert.equal(classifyGatewayRequestTarget('GET', '/gateway/%zz'), 'reject');
+});
+
+test('known gateway paths reject methods without an owned handler', () => {
+  assert.equal(classifyGatewayRequestTarget('PUT', '/gateway/api/me'), 'reject');
+  assert.equal(classifyGatewayRequestTarget('GET', '/gateway/api/logout'), 'reject');
+  assert.equal(classifyGatewayRequestTarget('POST', '/gateway/logout'), 'reject');
 });
