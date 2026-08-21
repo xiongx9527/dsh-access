@@ -70,6 +70,7 @@ test('ASCII controls cannot obscure any part of the gateway namespace', () => {
     for (let index = 0; index <= 'gateway'.length; index += 1) {
       const obscured = `${'gateway'.slice(0, index)}${escape}${'gateway'.slice(index)}`;
       assert.equal(classifyGatewayRequestTarget('GET', `/${obscured}/../api/session.list`), 'reject');
+      assert.equal(classifyGatewayRequestTarget('GET', `/${obscured}%zz/../api/session.list`), 'reject');
     }
   }
 });

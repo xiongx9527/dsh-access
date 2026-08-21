@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 47
+state_version: 51
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,11 +29,11 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 12
+  iteration: 13
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 10
-  no_progress_count: 4
+  failed_iteration_count: 11
+  no_progress_count: 5
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
@@ -549,6 +549,35 @@ history:
         handling.
       truncated: false
     completed_at: 2026-08-21T10:00:41.492Z
+  - goal_cycle: 2
+    iteration: 12
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A32
+    summary:
+      text: "Independent read-only verification of candidate
+        f56e6c38-1fec-4f6b-948a-44bf104ed166 at HEAD 077355a failed: 39
+        acceptance criteria passed and A2/A32 failed. The intended control-only
+        hardening is effective across 405,504 exhaustive cases, and 79,776
+        benign encoded `#`/`?`/`%` adjacency cases remain upstream. A newly
+        tested mixed class—control-obscured gateway tokens followed by malformed
+        percent suffixes—still classifies upstream in 73,920 cases, so
+        gateway-derived malformed paths are not yet completely fail-closed
+        despite all 178 runtime tests and required gates passing."
+      truncated: false
+    completed_at: 2026-08-21T10:09:32.462Z
+  - goal_cycle: 2
+    iteration: 12
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: User authorized automatic continuation; revise implementation for mixed
+        control-obscured token plus malformed-percent suffix combinations.
+      truncated: false
+    completed_at: 2026-08-21T10:09:33.705Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null
