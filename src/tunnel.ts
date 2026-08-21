@@ -34,7 +34,7 @@ function executableOnPath(): string | null {
     if (!directory) continue;
     for (const name of names) {
       const candidate = join(directory, name);
-      if (isUsableFile(candidate)) return candidate;
+      if (isExecutableFile(candidate)) return candidate;
     }
   }
   return null;

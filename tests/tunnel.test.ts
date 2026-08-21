@@ -92,7 +92,7 @@ test('non-executable PATH entries do not shadow a valid executable cache', async
   const pathDir = join(root, 'path');
   mkdirSync(cacheDir, { recursive: true });
   mkdirSync(pathDir, { recursive: true });
-  const asset = releaseAsset().name.replace(/\\.tgz$/i, '');
+  const asset = releaseAsset().name.replace(/\.tgz$/i, '');
   writeFileSync(join(cacheDir, asset), FAKE_CLOUDFLARED, { mode: 0o700 });
   const pathBinary = join(pathDir, 'cloudflared');
   writeFileSync(pathBinary, 'not executable', { mode: 0o600 });
