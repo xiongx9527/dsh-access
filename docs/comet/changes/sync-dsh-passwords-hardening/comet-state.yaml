@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 39
+state_version: 43
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,11 +29,11 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 10
+  iteration: 11
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 8
-  no_progress_count: 2
+  failed_iteration_count: 9
+  no_progress_count: 3
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
@@ -499,6 +499,28 @@ history:
         benign adjacent-name variants.
       truncated: false
     completed_at: 2026-08-21T09:41:10.907Z
+  - goal_cycle: 2
+    iteration: 10
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A32
+    summary:
+      text: 独立只读验证失败：A1-A41 中 39 项通过，A2/A32 失败，0 项 blocked。当前提交通过全部既有路径变体及 177
+        项测试、构建、diff、scope 和 package 门禁，但新增控制字符变体证明 gateway 路径分类仍未完全 fail-closed。
+      truncated: false
+    completed_at: 2026-08-21T09:48:39.516Z
+  - goal_cycle: 2
+    iteration: 10
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: User authorized automatic continuation; revise implementation for the
+        final percent-encoded control-character adjacency variants.
+      truncated: false
+    completed_at: 2026-08-21T09:48:46.341Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null

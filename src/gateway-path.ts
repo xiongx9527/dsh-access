@@ -49,6 +49,7 @@ function claimsGatewayNamespace(pathname: string): boolean {
     }
     if (stack.length === 0 && (
       segment.toLowerCase() === 'gateway' ||
+      /^gateway[\u0000-\u001f\u007f]/i.test(segment) ||
       /^gateway%(?![0-9a-f]{2})/i.test(segment)
     )) return true;
     stack.push(segment);
