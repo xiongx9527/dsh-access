@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureCloudflared, extractTryCloudflareUrl, cloudflaredDownloadUrls, releaseAsset } from '../src/tunnel.js';
+import { ensureCloudflared, extractTryCloudflareUrl, cloudflaredDownloadUrls, releaseAsset, streamDownloadToFile, withCloudflaredDownload } from '../src/tunnel.js';
 
 test('extractTryCloudflareUrl accepts only trycloudflare HTTPS URLs', () => {
   assert.equal(
@@ -65,6 +65,29 @@ test('ensureCloudflared prefers an explicit PATH binary over a stale cache', asy
   } finally {
     process.env.PATH = previous;
   }
+});
+
+test('cloudflared response streams to a temporary file and rejects undersized payloads', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-access-stream-download-'));
+  const good = join(root, 'good.download');
+  const bytes = new Uint8Array(1024 * 1024 + 1).fill(7);
+  assert.equal(await streamDownloadToFile(new Response(bytes), good), bytes.length);
+  assert.equal(readFileSync(good).length, bytes.length);
+  const small = join(root, 'small.download');
+  await assert.rejects(streamDownloadToFile(new Response('error page'), small), /small/i);
+  assert.equal(existsSync(small), false);
+});
+
+test('concurrent cloudflared downloads for one home share one transaction', async () => {
+  let calls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const operation = async () => { calls += 1; await gate; return '/tmp/cloudflared'; };
+  const first = withCloudflaredDownload('/tmp/one-home', operation);
+  const second = withCloudflaredDownload('/tmp/one-home', operation);
+  release();
+  assert.deepEqual(await Promise.all([first, second]), ['/tmp/cloudflared', '/tmp/cloudflared']);
+  assert.equal(calls, 1);
 });
 
 test('cloudflared download failures do not expose mirror query secrets', async () => {

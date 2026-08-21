@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { accessSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { accessSync, chmodSync, constants, copyFileSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { delimiter, join } from 'node:path';
 
 export type TunnelPhase = 'idle' | 'downloading' | 'starting' | 'running' | 'stopping' | 'error';
@@ -96,6 +98,30 @@ async function extractTarGz(archive: string, destination: string): Promise<void>
   if (child.exitCode !== 0) throw new Error(`cloudflared extract failed: ${Buffer.concat(stderr).toString('utf8').trim()}`);
 }
 
+const MIN_CLOUDFLARED_BYTES = 1024 * 1024;
+const downloads = new Map<string, Promise<string>>();
+
+export async function streamDownloadToFile(response: Response, destination: string): Promise<number> {
+  if (!response.ok || response.body === null) throw new Error(`cloudflared download HTTP ${String(response.status)}`);
+  try {
+    await pipeline(Readable.fromWeb(response.body as never), createWriteStream(destination, { mode: 0o600 }));
+    const size = statSync(destination).size;
+    if (size < MIN_CLOUDFLARED_BYTES) throw new Error(`cloudflared download is too small (${String(size)} bytes)`);
+    return size;
+  } catch (error) {
+    rmSync(destination, { force: true });
+    throw error;
+  }
+}
+
+export function withCloudflaredDownload(home: string, operation: () => Promise<string>): Promise<string> {
+  const current = downloads.get(home);
+  if (current) return current;
+  const pending = operation().finally(() => { downloads.delete(home); });
+  downloads.set(home, pending);
+  return pending;
+}
+
 async function verifyDownloadedExecutable(file: string): Promise<void> {
   if (!isExecutableFile(file)) throw new Error('cloudflared download did not produce an executable file');
   const child = spawn(file, ['--version'], { stdio: 'ignore' });
@@ -116,7 +142,7 @@ async function verifyDownloadedExecutable(file: string): Promise<void> {
   }
 }
 
-export async function ensureCloudflared(home: string): Promise<string> {
+async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promise<string> {
   const directory = join(home, 'remote-access', 'bin');
   const executable = join(directory, executableName());
   const asset = releaseAsset();
@@ -147,51 +173,58 @@ export async function ensureCloudflared(home: string): Promise<string> {
     }
   }
 
-  let bytes: Buffer | null = null;
+  const transaction = mkdtempSync(join(directory, '.cloudflared-install-'));
+  const downloaded = join(transaction, asset.name);
   const failures: string[] = [];
-  for (const [index, url] of cloudflaredDownloadUrls(asset.name).entries()) {
-    const sourceLabel = index === 0 ? 'official release' : `configured mirror ${index}`;
-    try {
-      const response = await fetch(url, { redirect: 'follow' });
-      if (!response.ok) {
-        failures.push(`${sourceLabel}: HTTP ${String(response.status)}`);
-        continue;
-      }
-      bytes = Buffer.from(await response.arrayBuffer());
-      break;
-    } catch (error) {
-      // Do not echo arbitrary fetch errors: a configured mirror may contain
-      // query-string credentials or other deployment-only material.
-      failures.push(`${sourceLabel}: network request failed`);
-    }
-  }
-  if (bytes === null) {
-    throw new Error(`cloudflared download failed; try another mirror or install cloudflared on PATH (${failures.join('; ')})`);
-  }
-
-  if (asset.archive) {
-    const archive = join(directory, asset.name);
-    writeFileSync(archive, bytes, { mode: 0o600 });
-    try {
-      await extractTarGz(archive, directory);
-    } finally {
-      rmSync(archive, { force: true });
-    }
-  } else {
-    writeFileSync(executable, bytes, { mode: 0o700 });
-  }
-  if (!isExecutableFile(executable)) {
-    rmSync(executable, { force: true });
-    throw new Error('cloudflared download did not produce an executable file');
-  }
-  if (process.platform !== 'win32') chmodSync(executable, 0o700);
+  let downloadedOk = false;
   try {
-    await verifyDownloadedExecutable(executable);
-  } catch (error) {
-    rmSync(executable, { force: true });
-    throw error;
+    for (const [index, url] of cloudflaredDownloadUrls(asset.name).entries()) {
+      const sourceLabel = index === 0 ? 'official release' : `configured mirror ${index}`;
+      try {
+        const timeout = AbortSignal.timeout(120_000);
+        const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+        const response = await fetch(url, { redirect: 'follow', signal: combined });
+        await streamDownloadToFile(response, downloaded);
+        downloadedOk = true;
+        break;
+      } catch {
+        rmSync(downloaded, { force: true });
+        failures.push(`${sourceLabel}: download failed`);
+      }
+    }
+    if (!downloadedOk) {
+      throw new Error(`cloudflared download failed; try another mirror or install cloudflared on PATH (${failures.join('; ')})`);
+    }
+
+    let candidate = downloaded;
+    if (asset.archive) {
+      const extracted = join(transaction, 'extracted');
+      mkdirSync(extracted, { recursive: true, mode: 0o700 });
+      await extractTarGz(downloaded, extracted);
+      const findBinary = (directoryPath: string): string | null => {
+        for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
+          const child = join(directoryPath, entry.name);
+          if (entry.isDirectory()) {
+            const nested = findBinary(child);
+            if (nested) return nested;
+          } else if (entry.isFile() && entry.name === executableName()) return child;
+        }
+        return null;
+      };
+      candidate = findBinary(extracted) ?? '';
+      if (!candidate) throw new Error('cloudflared binary not found after extraction');
+    }
+    if (process.platform !== 'win32') chmodSync(candidate, 0o700);
+    await verifyDownloadedExecutable(candidate);
+    renameSync(candidate, executable);
+    return executable;
+  } finally {
+    rmSync(transaction, { recursive: true, force: true });
   }
-  return executable;
+}
+
+export function ensureCloudflared(home: string, signal?: AbortSignal): Promise<string> {
+  return withCloudflaredDownload(home, () => ensureCloudflaredOnce(home, signal));
 }
 
 export interface CloudflaredTunnelOptions {
