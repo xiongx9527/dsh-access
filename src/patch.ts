@@ -189,7 +189,7 @@ export function rollbackPatch(dshRoot: string): 'rolled-back' | 'no-backup' | 'm
   const wlFile = path.join(dshRoot, WHITELIST_TARGET);
   if (!existsSync(settingsFile) || !existsSync(wlFile)) return 'missing';
   let changed = false;
-  for (const target of [settingsFile, wlFile]) {
+  for (const target of [settingsFile, wlFile, path.join(dshRoot, WORKSPACE_CLIENT_TARGET)]) {
     const bak = target + BAK_SUFFIX;
     if (existsSync(bak)) {
       writeFileSync(target, readFileSync(bak));

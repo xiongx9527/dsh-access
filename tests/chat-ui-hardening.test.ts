@@ -6,9 +6,10 @@ const source = readFileSync(new URL('../src/client/chat.tsx', import.meta.url), 
 
 test('chat launcher persists a per-account dragged position and suppresses accidental open', () => {
   assert.match(source, /dsh-access-chat-position:\$\{me\.id\}/);
-  assert.match(source, /event\.button !== 1/);
+  assert.match(source, /event\.pointerType === 'mouse' && event\.button !== 0/);
   assert.match(source, /draggedRef\.current/);
   assert.match(source, /onPointerMove/);
+  assert.match(source, /positionRef\.current/);
 });
 
 test('chat messages render avatars and optimistic sends recover on failure', () => {

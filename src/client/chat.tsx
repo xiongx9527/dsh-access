@@ -68,6 +68,7 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   const [position, setPosition] = useState<{ left: number; bottom: number } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ x: number; y: number; left: number; bottom: number } | null>(null);
+  const positionRef = useRef<{ left: number; bottom: number } | null>(null);
   const draggedRef = useRef(false);
   const lastSeenId = useRef(0);
   const openRef = useRef(false);
@@ -86,7 +87,10 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
     if (!me) return;
     try {
       const saved = JSON.parse(localStorage.getItem(`dsh-access-chat-position:${me.id}`) ?? 'null');
-      if (Number.isFinite(saved?.left) && Number.isFinite(saved?.bottom)) setPosition(saved);
+      if (Number.isFinite(saved?.left) && Number.isFinite(saved?.bottom)) {
+        positionRef.current = saved;
+        setPosition(saved);
+      }
     } catch { /* ignore invalid local UI preference */ }
   }, [me?.id]);
 
@@ -234,7 +238,7 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
         title={t('chat.open')}
         style={position ?? undefined}
         onPointerDown={(event) => {
-          if (event.button !== 1) return;
+          if (event.pointerType === 'mouse' && event.button !== 0) return;
           event.preventDefault();
           event.currentTarget.setPointerCapture(event.pointerId);
           const rect = event.currentTarget.getBoundingClientRect();
@@ -247,13 +251,15 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
           const dx = event.clientX - drag.x;
           const dy = event.clientY - drag.y;
           if (Math.hypot(dx, dy) > 4) draggedRef.current = true;
-          setPosition({ left: Math.max(0, drag.left + dx), bottom: Math.max(0, drag.bottom - dy) });
+          const nextPosition = { left: Math.max(0, drag.left + dx), bottom: Math.max(0, drag.bottom - dy) };
+          positionRef.current = nextPosition;
+          setPosition(nextPosition);
         }}
         onPointerUp={(event) => {
           if (!dragRef.current) return;
           event.currentTarget.releasePointerCapture(event.pointerId);
           dragRef.current = null;
-          if (me && position) localStorage.setItem(`dsh-access-chat-position:${me.id}`, JSON.stringify(position));
+          if (me && positionRef.current) localStorage.setItem(`dsh-access-chat-position:${me.id}`, JSON.stringify(positionRef.current));
         }}
         onClick={openPanel}
       >

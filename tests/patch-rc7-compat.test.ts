@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { applyRemotePatch, patchStatus } from '../src/patch.js';
+import { applyRemotePatch, patchStatus, rollbackPatch } from '../src/patch.js';
 
 function fixture(whitelist: string, workspace?: string) {
   const root = mkdtempSync(path.join(tmpdir(), 'dsh-access-patch-'));
@@ -41,4 +41,24 @@ test('optional workspace target absence does not block core patches', () => {
   const { root } = fixture('const WEB_SETTINGS_NAMESPACES = ["agent-loop"];');
   assert.equal(applyRemotePatch(root), 'applied');
   assert.equal(patchStatus(root).workspaceSearch, true);
+});
+
+test('rollback restores the optional workspace client backup', () => {
+  const workspace = [
+    'searchInput.current?.blur();',
+    'if (normalizedQuery !== "") return;',
+    'setSearchExpanded(false);',
+    '}, [',
+    'normalizedQuery,',
+    'wide,',
+    'searchExpanded',
+    ']);',
+    'className: WorkspaceBrowser_module_css_default.searchInput,',
+    'type: "text",',
+  ].join('\n');
+  const { root } = fixture('const WEB_SETTINGS_NAMESPACES = ["agent-loop"];', workspace);
+  assert.equal(applyRemotePatch(root), 'applied');
+  assert.equal(rollbackPatch(root), 'rolled-back');
+  const file = path.join(root, 'node_modules/@deepseek-ai/dsh-client-ui-workspace/lib/client.js');
+  assert.equal(readFileSync(file, 'utf8'), workspace);
 });
