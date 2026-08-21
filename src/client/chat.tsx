@@ -6,6 +6,7 @@
 // 数据面：/gateway/api/messages（列表/发送）。实时采用轮询（4 秒），不依赖 SSE。
 import { useEffect, useRef, useState } from 'react';
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
+import { nextChatPollState, pollUrl, type ChatPollState } from '../chat-polling.js';
 
 interface ChatMessage {
   id: number;
@@ -65,7 +66,7 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const lastSeenId = useRef(0);
   const openRef = useRef(false);
-  const initializedRef = useRef(false);
+  const pollStateRef = useRef<ChatPollState>({ initialized: false, lastSeenId: 0, rebuilding: false });
 
   useEffect(() => {
     openRef.current = open;
@@ -84,9 +85,12 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   // 轮询加载 + 未读统计（不依赖 SSE，消息无需刷新页面）
   useEffect(() => {
     let disposed = false;
+    let inFlight = false;
 
     const load = () => {
-      fetch('/gateway/api/messages')
+      if (disposed || inFlight) return;
+      inFlight = true;
+      fetch(pollUrl(pollStateRef.current))
         .then(async (res) => {
           const d = await res.json().catch(() => ({}));
           if (disposed) return;
@@ -96,15 +100,17 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
             incoming.sort((a, b) => a.id - b.id);
             const nextMe = (d.me ?? null) as Me | null;
             setMe(nextMe);
-            const maxId = incoming.length > 0 ? incoming[incoming.length - 1].id : 0;
-            if (nextMe && initializedRef.current && maxId > lastSeenId.current) {
-              const fresh = incoming.filter(
-                (m) => m.sender_id !== nextMe.id && m.id > lastSeenId.current,
-              ).length;
-              if (fresh > 0 && !openRef.current) setUnread((u) => u + fresh);
+            const latestId = Number.isSafeInteger(d.latestId) && d.latestId >= 0 ? d.latestId : 0;
+            if (nextMe) {
+              const transition = nextChatPollState(pollStateRef.current, incoming, latestId, nextMe.id, openRef.current);
+              pollStateRef.current = transition.state;
+              lastSeenId.current = transition.state.lastSeenId;
+              if (transition.unread > 0) setUnread((count) => count + transition.unread);
+              if (transition.state.rebuilding) {
+                window.setTimeout(load, 0);
+                return;
+              }
             }
-            lastSeenId.current = Math.max(lastSeenId.current, maxId);
-            initializedRef.current = true;
             setMessages((prev) => mergeById(prev, incoming));
             setError('');
           } else if (!res.ok) {
@@ -113,7 +119,8 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
         })
         .catch(() => {
           if (!disposed) setError(t('chat.loadFailed'));
-        });
+        })
+        .finally(() => { inFlight = false; });
     };
 
     load();

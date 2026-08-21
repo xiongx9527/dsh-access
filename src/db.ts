@@ -862,6 +862,26 @@ export class Database {
     }));
   }
 
+  listMessagesAfter(sinceId: number, limit = 300): MessageRow[] {
+    const rows = this.stmt(
+      `SELECT m.id, m.sender_id, u.username, m.recipient_id, m.content, m.tags, m.created_at
+       FROM messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.id > ? ORDER BY m.id ASC LIMIT ?`,
+    ).all(sinceId, Math.min(Math.max(limit, 1), 500)) as unknown as {
+      id: number; sender_id: number; username: string; recipient_id: number | null;
+      content: string; tags: string; created_at: string;
+    }[];
+    return rows.map((row) => ({
+      id: row.id,
+      sender_id: row.sender_id,
+      sender_name: this.crypto.decrypt(row.username) ?? '',
+      recipient_id: row.recipient_id,
+      content: row.content,
+      tags: parseJsonArray(row.tags),
+      created_at: row.created_at,
+    }));
+  }
+
   addMessage(senderId: number, recipientId: number | null, content: string, tags: string[]): MessageRow {
     const result = this.stmt('INSERT INTO messages (sender_id, recipient_id, content, tags) VALUES (?, ?, ?, ?)').run(
       senderId,

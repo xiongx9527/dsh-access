@@ -1650,11 +1650,16 @@ export function createGatewayServer(
   app.get('/gateway/api/messages', (req, res) => {
     const me = apiAuth(req, res);
     if (!me) return;
-    const all = db.listMessages(300);
-    const mine = all.filter(
+    const hasSince = typeof req.query.since === 'string';
+    const parsedSince = hasSince ? Number(req.query.since) : Number.NaN;
+    const since = Number.isSafeInteger(parsedSince) && parsedSince >= 0 ? parsedSince : 0;
+    const visible = (hasSince ? db.listMessagesAfter(since, 300) : db.listMessages(300)).filter(
       (m) => m.recipient_id === null || m.recipient_id === me.userId || m.sender_id === me.userId,
     );
-    res.json({ ok: true, me: { id: me.userId, username: me.username, role: me.role }, messages: mine });
+    const latestId = db.listMessages(300)
+      .filter((m) => m.recipient_id === null || m.recipient_id === me.userId || m.sender_id === me.userId)
+      .reduce((max, message) => Math.max(max, message.id), 0);
+    res.json({ ok: true, me: { id: me.userId, username: me.username, role: me.role }, messages: visible, latestId });
   });
 
   // ── 发送留言（所有登录用户） ─────────────────────────────────
