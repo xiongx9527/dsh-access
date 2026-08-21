@@ -88,12 +88,28 @@ function waitForProcess(child: ChildProcess): Promise<void> {
   return new Promise((resolve) => child.once('exit', () => resolve()));
 }
 
-async function extractTarGz(archive: string, destination: string): Promise<void> {
-  const child = spawn('tar', ['-xzf', archive, '-C', destination], { stdio: ['ignore', 'pipe', 'pipe'] });
+export function isSafeArchiveEntry(entry: string): boolean {
+  if (!entry || entry.includes('\\') || entry.startsWith('/') || /^[A-Za-z]:/.test(entry)) return false;
+  return !entry.split('/').some((segment) => segment === '..');
+}
+
+async function runTar(args: string[]): Promise<string> {
+  const child = spawn('tar', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const stdout: Buffer[] = [];
   const stderr: Buffer[] = [];
+  child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
   child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
   await waitForProcess(child);
-  if (child.exitCode !== 0) throw new Error(`cloudflared extract failed: ${Buffer.concat(stderr).toString('utf8').trim()}`);
+  if (child.exitCode !== 0) throw new Error(`cloudflared archive failed: ${Buffer.concat(stderr).toString('utf8').trim()}`);
+  return Buffer.concat(stdout).toString('utf8');
+}
+
+async function extractTarGz(archive: string, destination: string): Promise<void> {
+  const entries = (await runTar(['-tzf', archive])).split(/\r?\n/).filter(Boolean);
+  if (entries.length === 0 || entries.some((entry) => !isSafeArchiveEntry(entry))) {
+    throw new Error('cloudflared archive contains an unsafe entry');
+  }
+  await runTar(['-xzf', archive, '-C', destination]);
 }
 
 const MIN_CLOUDFLARED_BYTES = 1024 * 1024;

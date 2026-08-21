@@ -3,9 +3,25 @@ import test from 'node:test';
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureCloudflared, extractTryCloudflareUrl, cloudflaredDownloadUrls, releaseAsset, streamDownloadToFile, withCloudflaredDownload } from '../src/tunnel.js';
+import { ensureCloudflared, extractTryCloudflareUrl, cloudflaredDownloadUrls, isSafeArchiveEntry, releaseAsset, streamDownloadToFile, withCloudflaredDownload } from '../src/tunnel.js';
 
 const FAKE_CLOUDFLARED = process.platform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n';
+
+test('cloudflared archives reject absolute and parent-traversing entries', () => {
+  for (const entry of ['/tmp/cloudflared', '../cloudflared', 'dir/../../cloudflared', 'C:/cloudflared.exe', 'dir\\..\\cloudflared']) {
+    assert.equal(isSafeArchiveEntry(entry), false, entry);
+  }
+  assert.equal(isSafeArchiveEntry('cloudflared'), true);
+  assert.equal(isSafeArchiveEntry('cloudflared/2026/bin/cloudflared'), true);
+});
+
+test('archive entries stay inside the extraction directory', () => {
+  assert.equal(isSafeArchiveEntry('cloudflared'), true);
+  assert.equal(isSafeArchiveEntry('nested/cloudflared'), true);
+  assert.equal(isSafeArchiveEntry('../escape'), false);
+  assert.equal(isSafeArchiveEntry('/absolute'), false);
+  assert.equal(isSafeArchiveEntry('nested/../../escape'), false);
+});
 
 test('extractTryCloudflareUrl accepts only trycloudflare HTTPS URLs', () => {
   assert.equal(
@@ -59,6 +75,27 @@ test('ensureCloudflared prefers an explicit PATH binary over a stale cache', asy
   const pathBinary = join(pathDir, process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');
   writeFileSync(pathBinary, FAKE_CLOUDFLARED);
   if (process.platform !== 'win32') chmodSync(pathBinary, 0o700);
+  const previous = process.env.PATH;
+  process.env.PATH = pathDir;
+  try {
+    const resolved = await ensureCloudflared(root);
+    assert.equal(readFileSync(resolved, 'utf8'), FAKE_CLOUDFLARED);
+  } finally {
+    process.env.PATH = previous;
+  }
+});
+
+test('non-executable PATH entries do not shadow a valid executable cache', async (t) => {
+  if (process.platform === 'win32') return t.skip('POSIX executable permissions are not applicable');
+  const root = mkdtempSync(join(tmpdir(), 'dshpw-cloudflared-path-invalid-'));
+  const cacheDir = join(root, 'remote-access', 'bin');
+  const pathDir = join(root, 'path');
+  mkdirSync(cacheDir, { recursive: true });
+  mkdirSync(pathDir, { recursive: true });
+  const asset = releaseAsset().name.replace(/\\.tgz$/i, '');
+  writeFileSync(join(cacheDir, asset), FAKE_CLOUDFLARED, { mode: 0o700 });
+  const pathBinary = join(pathDir, 'cloudflared');
+  writeFileSync(pathBinary, 'not executable', { mode: 0o600 });
   const previous = process.env.PATH;
   process.env.PATH = pathDir;
   try {
