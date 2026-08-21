@@ -882,6 +882,40 @@ export class Database {
     }));
   }
 
+  listVisibleMessages(userId: number, sinceId: number | null, limit = 300): MessageRow[] {
+    const where = 'WHERE (m.recipient_id IS NULL OR m.recipient_id = ? OR m.sender_id = ?)';
+    const query = sinceId === null
+      ? `SELECT m.id, m.sender_id, u.username, m.recipient_id, m.content, m.tags, m.created_at
+         FROM messages m JOIN users u ON u.id = m.sender_id ${where}
+         ORDER BY m.id DESC LIMIT ?`
+      : `SELECT m.id, m.sender_id, u.username, m.recipient_id, m.content, m.tags, m.created_at
+         FROM messages m JOIN users u ON u.id = m.sender_id ${where} AND m.id > ?
+         ORDER BY m.id ASC LIMIT ?`;
+    const args = sinceId === null
+      ? [userId, userId, Math.min(Math.max(limit, 1), 500)]
+      : [userId, userId, sinceId, Math.min(Math.max(limit, 1), 500)];
+    const rows = this.stmt(query).all(...args) as unknown as {
+      id: number; sender_id: number; username: string; recipient_id: number | null;
+      content: string; tags: string; created_at: string;
+    }[];
+    return rows.map((row) => ({
+      id: row.id,
+      sender_id: row.sender_id,
+      sender_name: this.crypto.decrypt(row.username) ?? '',
+      recipient_id: row.recipient_id,
+      content: row.content,
+      tags: parseJsonArray(row.tags),
+      created_at: row.created_at,
+    }));
+  }
+
+  latestVisibleMessageId(userId: number): number {
+    const row = this.stmt(
+      'SELECT MAX(id) AS id FROM messages WHERE recipient_id IS NULL OR recipient_id = ? OR sender_id = ?',
+    ).get(userId, userId) as { id: number | null } | undefined;
+    return row?.id ?? 0;
+  }
+
   addMessage(senderId: number, recipientId: number | null, content: string, tags: string[]): MessageRow {
     const result = this.stmt('INSERT INTO messages (sender_id, recipient_id, content, tags) VALUES (?, ?, ?, ?)').run(
       senderId,
