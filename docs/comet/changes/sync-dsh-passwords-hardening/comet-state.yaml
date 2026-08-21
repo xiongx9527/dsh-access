@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 55
+state_version: 59
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,11 +29,11 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 14
+  iteration: 15
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 12
-  no_progress_count: 6
+  failed_iteration_count: 13
+  no_progress_count: 7
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
@@ -607,6 +607,31 @@ history:
         percent suffix mixed with control-obscured gateway tokens.
       truncated: false
     completed_at: 2026-08-21T10:19:12.554Z
+  - goal_cycle: 2
+    iteration: 14
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A32
+    summary:
+      text: 第14轮第1次独立只读验证失败：A1-A41 中 39 项 passed，A2/A32 failed，0 blocked。HEAD 3fa7b7e
+        通过 fresh 178/178 测试、构建、diff、scope 和 package 门禁；既有 405,504 项控制矩阵、79,776
+        项合法编码邻接矩阵及 73,920 项单层畸形后缀矩阵全部通过。但新增嵌套畸形后缀矩阵发现 443,520 项中 369,600 项错误分类为
+        upstream，例如控制字符遮蔽 token 后接 `%2580` 或 `%25c2`，故编码/双编码 gateway 变形尚未完全
+        fail-closed。
+      truncated: false
+    completed_at: 2026-08-21T10:27:16.904Z
+  - goal_cycle: 2
+    iteration: 14
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: User authorized continuation; revise implementation for nested invalid
+        UTF-8 percent suffixes revealed after decoding.
+      truncated: false
+    completed_at: 2026-08-21T10:27:18.141Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null

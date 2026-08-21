@@ -26,17 +26,25 @@ function rawPathOf(requestTarget: string): string {
   return requestTarget.split(/[?#]/, 1)[0] || '/';
 }
 
-function decodeAsciiEscapes(rawPath: string): string {
+function hasInvalidEncodedByteRun(value: string): boolean {
+  return (value.match(/(?:%[0-9a-f]{2})+/gi) ?? []).some((run) => {
+    try { decodeURIComponent(run); return false; } catch { return true; }
+  });
+}
+
+function decodeAsciiEscapes(rawPath: string): { decoded: string; invalidEncodedBytes: boolean } {
   let decoded = rawPath;
+  let invalidEncodedBytes = false;
   // Every successful round removes at least one '%' from a nested escape, so input length
   // is a natural bound without rejecting benign paths at an arbitrary decoding depth.
   for (let index = 0; index <= rawPath.length; index += 1) {
+    invalidEncodedBytes ||= hasInvalidEncodedByteRun(decoded);
     const next = decoded.replace(/%([0-7][0-9a-f])/gi, (_escape, hex: string) =>
       String.fromCharCode(Number.parseInt(hex, 16)));
-    if (next === decoded) return decoded;
+    if (next === decoded) return { decoded, invalidEncodedBytes };
     decoded = next;
   }
-  return decoded;
+  return { decoded, invalidEncodedBytes };
 }
 
 function claimsGatewayNamespace(pathname: string, rejectMalformedSuffix = false): boolean {
@@ -68,12 +76,13 @@ export function classifyGatewayRequestTarget(method: string, requestTarget: stri
     (/^[a-z][a-z0-9+.-]*:/i.test(requestTarget) && !/^https?:\/\//i.test(requestTarget))
   ) return 'reject';
   const rawPath = rawPathOf(requestTarget);
-  const decoded = decodeAsciiEscapes(rawPath);
+  const { decoded, invalidEncodedBytes } = decodeAsciiEscapes(rawPath);
   if (decoded.includes('\\')) return 'reject';
   let hasInvalidPercentEncoding = false;
   try { decodeURIComponent(rawPath); } catch { hasInvalidPercentEncoding = true; }
-  const rawClaimsGateway = claimsGatewayNamespace(rawPath, hasInvalidPercentEncoding);
-  const decodedClaimsGateway = claimsGatewayNamespace(decoded, hasInvalidPercentEncoding);
+  const rejectInvalidSuffix = hasInvalidPercentEncoding || invalidEncodedBytes;
+  const rawClaimsGateway = claimsGatewayNamespace(rawPath, rejectInvalidSuffix);
+  const decodedClaimsGateway = claimsGatewayNamespace(decoded, rejectInvalidSuffix);
   const normalizedSegments: string[] = [];
   for (const segment of decoded.replace(/\/+/g, '/').split('/')) {
     if (!segment || segment === '.') continue;
