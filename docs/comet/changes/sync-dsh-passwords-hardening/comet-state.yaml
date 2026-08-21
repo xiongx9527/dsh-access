@@ -1,0 +1,128 @@
+schema: comet.native.v4
+name: sync-dsh-passwords-hardening
+language: zh-CN
+phase: build
+status: active
+state_version: 3
+brief: brief.md
+spec_changes:
+  - capability: chat-experience
+    operation: create
+    source: specs/chat-experience/spec.md
+  - capability: dsh-rc7-compat
+    operation: create
+    source: specs/dsh-rc7-compat/spec.md
+  - capability: security-hardening
+    operation: create
+    source: specs/security-hardening/spec.md
+  - capability: workspace-session-experience
+    operation: create
+    source: specs/workspace-session-experience/spec.md
+  - capability: cloudflared-download-hardening
+    operation: create
+    source: specs/cloudflared-download-hardening/spec.md
+workspace:
+  isolation: current
+  change_branch: comet/sync-dsh-passwords-hardening
+  target_branch: comet/sync-dsh-passwords-hardening
+  finish: null
+loop:
+  stage: building
+  goal_cycle: 1
+  iteration: 1
+  attempt: 0
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: submit-builder-candidate
+acceptance:
+  - id: A1
+    source: brief.md
+    text: Cookie 名称精确匹配，只剥 ASCII space/tab，值中的 `=` 被保留；Unicode 空白伪造 Cookie 不能认证，Gateway 与 Plugin 行为一致。
+    result: pending
+    reason: null
+  - id: A2
+    source: brief.md
+    text: 编码、双编码、压平和未知 `/gateway` 变形路径不能绕过登录门或代理到上游；合法 Gateway API 与本机 3080 行为不变。
+    result: pending
+    reason: null
+  - id: A3
+    source: brief.md
+    text: session history 和聊天写入中的隐藏 Unicode、危险 HTML/CSS 在模型输入边界被净化，普通文本、换行和数学比较符保留；文件 `read/raw/download` 保真。
+    result: pending
+    reason: null
+  - id: A4
+    source: brief.md
+    text: dsh-ssh 主机操作拒绝回环、私网、链路本地、未指定地址、IPv4 变体、mapped/compatible IPv6，以及任一解析结果为私网的 hostname；公网地址正常放行，DNS 失败时拒绝。
+    result: pending
+    reason: null
+  - id: A5
+    source: brief.md
+    text: 被过滤、净化或重新压缩的响应不同时发送 Content-Length 与 Transfer-Encoding，也不保留失效 Content-Encoding；透明响应无回归。
+    result: pending
+    reason: null
+  - id: A6
+    source: brief.md
+    text: 既有多用户架构继续保证 session ownership、workspace 响应隔离、sandbox 降级和权限撤销；本 change 不增加平行 ownership 表或判断路径。
+    result: pending
+    reason: null
+  - id: A7
+    source: brief.md
+    text: dsh rc.6/rc.7 下 slot 和 patch 状态判断正确；rc.7 缺少旧白名单时不误报 missing，可选 workspace 目标缺失不阻塞核心补丁。
+    result: pending
+    reason: null
+  - id: A8
+    source: brief.md
+    text: workspace/session 搜索无结果可通过外部点击收起清空，浏览器自动填充不会污染搜索字段。
+    result: pending
+    reason: null
+  - id: A9
+    source: brief.md
+    text: 聊天轮询使用 since 增量且不重叠；空数据库建立稳定基线，数据库重置或 ID 回退后重建基线且不产生 phantom 未读。
+    result: pending
+    reason: null
+  - id: A10
+    source: brief.md
+    text: 聊天入口默认显示并可按当前账号隐藏/恢复，隐藏不删除消息；拖动位置按账号持久化且不误触打开。
+    result: pending
+    reason: null
+  - id: A11
+    source: brief.md
+    text: 聊天消息支持头像、发送者元信息、现有标签和乐观发送；失败可恢复并显示错误，动画/触感遵守减少动画偏好。
+    result: pending
+    reason: null
+  - id: A12
+    source: brief.md
+    text: cloudflared 下载支持总超时/取消和同一 home 单飞，按官方源后显式 HTTPS 镜像顺序回退，日志不泄露完整镜像 URL。
+    result: pending
+    reason: null
+  - id: A13
+    source: brief.md
+    text: cloudflared 响应流式写入唯一临时文件，小于 1 MiB、解压失败或 `--version` 验证失败均被清理；仅验证成功后原子替换，既有有效缓存不被失败下载破坏。
+    result: pending
+    reason: null
+  - id: A14
+    source: brief.md
+    text: 认证、Admin/Guest、ownership、远程访问、3088/3080、WebSocket/SSE 的现有测试无回归，完整测试与构建通过。
+    result: pending
+    reason: null
+builder_handoff: null
+blockers: []
+verification: null
+history: []
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pending
+verification_report: null
+archived: false
+created_at: 2026-08-19T10:14:23.466Z
