@@ -41,9 +41,9 @@ test('the discovered installation root produces a real patch status and can be p
   const f = fixture(t);
   const root = findDshRoot('', f.entrypoint);
   assert.equal(root, realpathSync(f.prefix));
-  assert.deepEqual(patchStatus(root!), { settingsHostMode: false, whitelist: false });
+  assert.deepEqual(patchStatus(root!), { settingsHostMode: false, whitelist: false, workspaceSearch: true });
   assert.equal(applyRemotePatch(root!), 'applied');
-  assert.deepEqual(patchStatus(root!), { settingsHostMode: true, whitelist: true });
+  assert.deepEqual(patchStatus(root!), { settingsHostMode: true, whitelist: true, workspaceSearch: true });
   const workspaceSource = readFileSync(f.workspaceClient, 'utf8');
   assert.doesNotMatch(workspaceSource, /!row\.blank && .*rowActions/s);
   assert.match(workspaceSource, /items: row\.blank \? sessionMenuItems\.filter\(\(item\) => item\.id === "archive"\) : sessionMenuItems/);

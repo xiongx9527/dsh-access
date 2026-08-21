@@ -192,6 +192,7 @@ export function apply(ctx: ClientContext): void {
       {
         name: 'settings.section',
         id: 'dsh-access',
+        key: 'dsh-access',
         order: 10,
         label: () => '访问管理',
         locale: 'dshaccess',
@@ -221,6 +222,7 @@ export function apply(ctx: ClientContext): void {
             {
               name: 'sidebar.footer.action',
               id: 'dsh-access-account',
+              key: 'dsh-access-account',
               order: 10_000,
               locale: 'dshaccess',
               inject: () => ({}),
@@ -248,7 +250,7 @@ export function apply(ctx: ClientContext): void {
 
   ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register(
-      { name: 'shell.overlay', id: 'dsh-access-mobile-nav', order: 95, locale: 'dshaccess', inject: () => ({}) },
+      { name: 'shell.overlay', id: 'dsh-access-mobile-nav', key: 'dsh-access-mobile-nav', order: 95, locale: 'dshaccess', inject: () => ({}) },
       MobileNavigation,
     ),
   );
@@ -259,6 +261,7 @@ export function apply(ctx: ClientContext): void {
       {
         name: 'shell.overlay',
         id: 'dsh-access-chat',
+        key: 'dsh-access-chat',
         order: 100,
         locale: 'dshaccess',
         inject: () => ({}),
@@ -271,7 +274,7 @@ export function apply(ctx: ClientContext): void {
   // 读取 dsh 的 tokenUsage 投影并把增量上报给访问管理，用于子用户每小时 token 配额。
   ctx.slots.inject('conversation.composer.dock', () =>
     ctx.slots.register(
-      { name: 'conversation.composer.dock', id: 'dsh-access-token', order: 90 },
+      { name: 'conversation.composer.dock', id: 'dsh-access-token', key: 'dsh-access-token', order: 90 },
       TokenReporter,
     ),
   );

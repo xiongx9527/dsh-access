@@ -34,24 +34,22 @@ const WORKSPACE_CLIENT_TARGET = path.join(
 
 const SETTINGS_FROM = 'connection.isLoopback ? "host" : "memory"';
 const SETTINGS_TO = '"host"';
+const SEARCH_STICKY_RE =
+  /(searchInput\.current\?\.blur\(\);)[\t ]*\n[\t ]*(if \(normalizedQuery !== ""\) return;)[\t ]*\n[\t ]*(setSearchExpanded\(false\);)/;
+const SEARCH_STICKY_TO =
+  '$1\n\t\t\t\t\tif (normalizedQuery === "") {\n\t\t\t\t\t\tsetSearchExpanded(false);\n\t\t\t\t\t} else if (remoteSearch.status !== "loading" && remoteSearch.items.length === 0) {\n\t\t\t\t\t\tsetQuery("");\n\t\t\t\t\t\tsetSearchExpanded(false);\n\t\t\t\t\t}';
+const SEARCH_DEPS_RE =
+  /(\}, \[)[\t ]*\n[\t ]*normalizedQuery,[\t ]*\n[\t ]*wide,[\t ]*\n[\t ]*searchExpanded([\t ]*\n[\t ]*\]\);)/;
+const SEARCH_DEPS_TO = '$1\n\t\t\t\tremoteSearch,\n\t\t\t\tnormalizedQuery,\n\t\t\t\twide,\n\t\t\t\tsearchExpanded$2';
+const SEARCH_AUTOFILL_MARK = 'dsh-access-session-search';
+const SEARCH_AUTOFILL_RE =
+  /(className: WorkspaceBrowser_module_css_default\.searchInput,[\t ]*\n[\t ]*type: "text",)/;
+const SEARCH_AUTOFILL_TO =
+  '$1\n\t\t\t\t\t\t\tautoComplete: "off",\n\t\t\t\t\t\t\tname: "dsh-access-session-search",';
 
-/** 白名单完整列表：dsh 自带 7 个 + dsh-web-ui 插件 6 个 + 本项目 1 个 */
-const WL_NAMESPACES = [
-  'agent-loop',
-  'shell',
-  'locale',
-  'permission',
-  'ui-conversation',
-  'ui-theme',
-  'web-search-deepseek',
-  'task-board',
-  'dsh-ssh',
-  'pet',
-  'live-stats',
-  'remote-web-ui',
-  'skin-background',
-  'dsh-access',
-];
+function whitelistPatchApplicable(content: string): boolean {
+  return /WEB_SETTINGS_NAMESPACES\s*=/.test(content);
+}
 
 function hasPatchTargets(installRoot: string): boolean {
   return (
@@ -101,20 +99,28 @@ export function findDshRoot(explicit: string, entrypoint = process.argv[1] ?? ''
 }
 
 /** 补丁当前状态（用于 status 展示） */
-export function patchStatus(dshRoot: string): { settingsHostMode: boolean; whitelist: boolean } {
+export function patchStatus(dshRoot: string): { settingsHostMode: boolean; whitelist: boolean; workspaceSearch: boolean } {
   const settingsFile = path.join(dshRoot, SETTINGS_TARGET);
   const wlFile = path.join(dshRoot, WHITELIST_TARGET);
+  const workspaceFile = path.join(dshRoot, WORKSPACE_CLIENT_TARGET);
   let settingsHostMode = false;
   let whitelist = false;
+  let workspaceSearch = !existsSync(workspaceFile);
   try {
     const s = readFileSync(settingsFile, 'utf8');
     settingsHostMode = !s.includes(SETTINGS_FROM) && s.includes(SETTINGS_TO);
   } catch { /* 文件缺失按未打处理 */ }
   try {
     const w = readFileSync(wlFile, 'utf8');
-    whitelist = w.includes('"dsh-access"');
+    whitelist = !whitelistPatchApplicable(w) || /['"]dsh-access['"]/.test(w);
   } catch { /* 同上 */ }
-  return { settingsHostMode, whitelist };
+  try {
+    const workspace = readFileSync(workspaceFile, 'utf8');
+    workspaceSearch =
+      (!workspace.includes('if (normalizedQuery !== "") return;') || !SEARCH_STICKY_RE.test(workspace)) &&
+      (workspace.includes(SEARCH_AUTOFILL_MARK) || !SEARCH_AUTOFILL_RE.test(workspace));
+  } catch { /* 可选目标缺失视为已满足 */ }
+  return { settingsHostMode, whitelist, workspaceSearch };
 }
 
 /** 应用补丁（幂等）：返回 'applied'（本次有改动）或 'unchanged' 或 'missing'（目标文件不在） */
@@ -132,35 +138,42 @@ export function applyRemotePatch(dshRoot: string): 'applied' | 'unchanged' | 'mi
     changed = true;
   }
 
-  // 2) 白名单补齐（整块重建，兼容任意已打过部分补丁的状态）
+  // 2) rc.6 白名单只追加本插件；rc.7 已移除白名单，原生满足。
   const w = readFileSync(wlFile, 'utf8');
-  if (!w.includes('"dsh-access"')) {
-    const block =
-      'const WEB_SETTINGS_NAMESPACES = [\n\t' + WL_NAMESPACES.map((n) => `"${n}"`).join(',\n\t') + '\n];';
-    const re = /const WEB_SETTINGS_NAMESPACES = \[[\s\S]*?\];/;
-    if (!re.test(w)) return 'missing';
+  if (whitelistPatchApplicable(w) && !/['"]dsh-access['"]/.test(w)) {
+    const re = /const WEB_SETTINGS_NAMESPACES = \[([\s\S]*?)\];/;
+    const match = w.match(re);
+    if (!match) return 'missing';
     if (!existsSync(wlFile + BAK_SUFFIX)) writeFileSync(wlFile + BAK_SUFFIX, w);
-    writeFileSync(wlFile, w.replace(re, block));
+    const separator = match[1].trim() === '' ? '\n\t' : `${match[1].trimEnd()},\n\t`;
+    writeFileSync(wlFile, w.replace(re, `const WEB_SETTINGS_NAMESPACES = [${separator}"dsh-access"\n];`));
     changed = true;
   }
 
-  // 3) 空白 New Session 也显示操作菜单，但只提供归档，避免先发一条消息才能清理。
+  // 3) 可选 workspace 客户端补丁：搜索体验 + 空白会话归档。
   const workspaceClientFile = path.join(dshRoot, WORKSPACE_CLIENT_TARGET);
   if (existsSync(workspaceClientFile)) {
     const source = readFileSync(workspaceClientFile, 'utf8');
+    let patched = source;
+    if (SEARCH_STICKY_RE.test(patched) && SEARCH_DEPS_RE.test(patched)) {
+      patched = patched.replace(SEARCH_STICKY_RE, SEARCH_STICKY_TO).replace(SEARCH_DEPS_RE, SEARCH_DEPS_TO);
+    }
+    if (!patched.includes(SEARCH_AUTOFILL_MARK) && SEARCH_AUTOFILL_RE.test(patched)) {
+      patched = patched.replace(SEARCH_AUTOFILL_RE, SEARCH_AUTOFILL_TO);
+    }
     const archiveItems = 'items: row.blank ? sessionMenuItems.filter((item) => item.id === "archive") : sessionMenuItems,';
-    if (!source.includes(archiveItems)) {
+    if (!patched.includes(archiveItems)) {
       const actionGuard = /!row\.blank && \(0, react_jsx_runtime\.jsx\)\("span", \{(\s*className: Rows_module_css_default\.rowActions,)/;
-      if (actionGuard.test(source) && source.includes('items: sessionMenuItems,')) {
-        if (!existsSync(workspaceClientFile + BAK_SUFFIX)) {
-          writeFileSync(workspaceClientFile + BAK_SUFFIX, source);
-        }
-        const patched = source
+      if (actionGuard.test(patched) && patched.includes('items: sessionMenuItems,')) {
+        patched = patched
           .replace(actionGuard, '(0, react_jsx_runtime.jsx)("span", {$1')
           .replace('items: sessionMenuItems,', archiveItems);
-        writeFileSync(workspaceClientFile, patched);
-        changed = true;
       }
+    }
+    if (patched !== source) {
+      if (!existsSync(workspaceClientFile + BAK_SUFFIX)) writeFileSync(workspaceClientFile + BAK_SUFFIX, source);
+      writeFileSync(workspaceClientFile, patched);
+      changed = true;
     }
   }
 
