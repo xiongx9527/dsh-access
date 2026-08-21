@@ -31,5 +31,5 @@ test('only dsh-ssh host mutations invoke SSRF resolution', async () => {
   assert.equal(await sshHostRequestAllowed('GET', '/api/dsh-ssh/hosts', { host: '127.0.0.1' }, resolve), true);
   assert.equal(await sshHostRequestAllowed('POST', '/api/session.prompt', { host: '127.0.0.1' }, resolve), true);
   assert.equal(await sshHostRequestAllowed('PATCH', '/api/dsh-ssh/hosts/one', { host: '127.0.0.1' }, resolve), false);
-  assert.equal(await sshHostRequestAllowed('POST', '/api/dsh-ssh/test', { alias: 'saved' }, resolve), true);
+  assert.equal(await sshHostRequestAllowed('POST', '/api/dsh-ssh/test', { alias: 'saved' }, resolve), false);
 });

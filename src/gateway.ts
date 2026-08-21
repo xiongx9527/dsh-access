@@ -53,7 +53,7 @@ import { markGatewayProxyHeaders } from './local-access.js';
 import { readCookie } from './cookie.js';
 import { classifyGatewayRequestTarget } from './gateway-path.js';
 import { sanitizeJsonStrings, sanitizeText } from './content-sanitization.js';
-import { sshHostRequestAllowed } from './ssrf-policy.js';
+import { resolveSshHost } from './ssrf-policy.js';
 
 /** 网关内部扩展请求：权限执行时把用户/权限附在 req 上，供后续中间件与代理读取 */
 type Req = Request & {
@@ -2177,15 +2177,22 @@ export function createGatewayServer(
         }
 
         if (needsSshHostCheck) {
-          const allowed = await sshHostRequestAllowed(req.method, parsedUrl.pathname, bodyObj, async (hostname) => {
-            const addresses = await dns.promises.lookup(hostname, { all: true, verbatim: true });
-            return addresses.map((address) => address.address);
-          });
-          if (!allowed) {
+          const host = bodyObj !== null && typeof bodyObj === 'object'
+            ? (bodyObj as Record<string, unknown>).host
+            : null;
+          const resolved = typeof host === 'string'
+            ? await resolveSshHost(host, async (hostname) => {
+                const addresses = await dns.promises.lookup(hostname, { all: true, verbatim: true });
+                return addresses.map((address) => address.address);
+              })
+            : null;
+          if (resolved === null) {
             upstreamReq.destroy();
             res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.folderDenied')));
             return;
           }
+          (bodyObj as Record<string, unknown>).host = resolved;
+          bodyRewritten = true;
         }
 
         if (needsTransferCheck) {

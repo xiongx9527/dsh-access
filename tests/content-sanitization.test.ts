@@ -3,7 +3,7 @@ import test from 'node:test';
 import { sanitizeHiddenUnicode, sanitizeJsonStrings, sanitizeText } from '../src/content-sanitization.js';
 
 test('hidden Unicode is removed without changing visible text or line breaks', () => {
-  assert.equal(sanitizeHiddenUnicode('alpha\u200bbeta\n1 < 2\u202e'), 'alphabeta\n1 < 2');
+  assert.equal(sanitizeHiddenUnicode('alpha\u200bbeta\n1 < 2\u202e\u206a'), 'alphabeta\n1 < 2');
 });
 
 test('chat text removes hidden HTML CSS and script payloads but keeps comparisons', () => {
@@ -12,7 +12,7 @@ test('chat text removes hidden HTML CSS and script payloads but keeps comparison
 });
 
 test('session history sanitation recursively changes strings without mutating the input', () => {
-  const input = { result: { value: [{ text: 'a\u200bb' }], count: 1 } };
+  const input = { result: { value: [{ text: '<style>x</style>a\u200bb url\u200b(https://evil.test)' }], count: 1 } };
   assert.deepEqual(sanitizeJsonStrings(input), { result: { value: [{ text: 'ab' }], count: 1 } });
-  assert.equal(input.result.value[0].text, 'a\u200bb');
+  assert.equal(input.result.value[0].text, '<style>x</style>a\u200bb url\u200b(https://evil.test)');
 });

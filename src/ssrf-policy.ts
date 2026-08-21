@@ -70,14 +70,19 @@ export function isPrivateHost(host: string): boolean {
   const v6 = parseV6(value); return v6 ? privateV6(v6) : false;
 }
 
-export async function isSshHostAllowed(host: string, resolve: HostResolver): Promise<boolean> {
+export async function resolveSshHost(host: string, resolve: HostResolver): Promise<string | null> {
   const value = host.trim().toLowerCase();
-  if (!value || isPrivateHost(value)) return false;
-  if (parseV4(value) || parseV6(value)) return true;
+  if (!value || isPrivateHost(value)) return null;
+  if (parseV4(value) || parseV6(value)) return value;
   try {
     const addresses = await resolve(value);
-    return addresses.length > 0 && addresses.every((address) => !isPrivateHost(address));
-  } catch { return false; }
+    if (addresses.length === 0 || addresses.some((address) => isPrivateHost(address))) return null;
+    return addresses[0] ?? null;
+  } catch { return null; }
+}
+
+export async function isSshHostAllowed(host: string, resolve: HostResolver): Promise<boolean> {
+  return (await resolveSshHost(host, resolve)) !== null;
 }
 
 export async function sshHostRequestAllowed(
@@ -91,5 +96,5 @@ export async function sshHostRequestAllowed(
   if (!needsCheck) return true;
   if (body === null || typeof body !== 'object') return false;
   const host = (body as Record<string, unknown>).host;
-  return typeof host !== 'string' ? true : isSshHostAllowed(host, resolve);
+  return typeof host === 'string' && (await isSshHostAllowed(host, resolve));
 }
