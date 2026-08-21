@@ -48,6 +48,7 @@
     "README.md",
     "README_en.md",
     "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
     ".env.example"
   ],
   "repository": {
