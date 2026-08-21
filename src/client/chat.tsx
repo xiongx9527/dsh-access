@@ -16,6 +16,7 @@ interface ChatMessage {
   content: string;
   tags: string[];
   created_at: string;
+  optimistic?: boolean;
 }
 
 interface Me {
@@ -64,7 +65,10 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   const [unread, setUnread] = useState(0);
   const [shaking, setShaking] = useState(false);
   const [chatEnabled, setChatEnabled] = useState<boolean | null>(null);
+  const [position, setPosition] = useState<{ left: number; bottom: number } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ x: number; y: number; left: number; bottom: number } | null>(null);
+  const draggedRef = useRef(false);
   const lastSeenId = useRef(0);
   const openRef = useRef(false);
   const pollStateRef = useRef<ChatPollState>({ initialized: false, lastSeenId: 0, rebuilding: false });
@@ -77,6 +81,14 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
       .catch(() => { if (active) setChatEnabled(false); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!me) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`dsh-access-chat-position:${me.id}`) ?? 'null');
+      if (Number.isFinite(saved?.left) && Number.isFinite(saved?.bottom)) setPosition(saved);
+    } catch { /* ignore invalid local UI preference */ }
+  }, [me?.id]);
 
   useEffect(() => {
     openRef.current = open;
@@ -159,34 +171,50 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
   };
 
   const openPanel = () => {
+    if (draggedRef.current) {
+      draggedRef.current = false;
+      return;
+    }
     setOpen(true);
     setUnread(0);
   };
 
   const send = () => {
     const content = draft.trim();
-    if (!content || busy) return;
+    if (!content || busy || !me) return;
+    const sentTags = [...tags];
+    const temporaryId = -Date.now();
+    const optimistic: ChatMessage = {
+      id: temporaryId,
+      sender_id: me.id,
+      sender_name: me.username,
+      recipient_id: null,
+      content,
+      tags: sentTags,
+      created_at: new Date().toISOString(),
+      optimistic: true,
+    };
+    setMessages((previous) => mergeById(previous, [optimistic]));
+    setDraft('');
+    setTags([]);
     setBusy(true);
     setError('');
     fetch('/gateway/api/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content, tags }),
+      body: JSON.stringify({ content, tags: sentTags }),
     })
-      .then(async (res) => {
-        const d = await res.json().catch(() => ({}));
-        if (res.ok && d.ok) {
-          setDraft('');
-          setTags([]);
-          if (d.message) {
-            const m = d.message as ChatMessage;
-            setMessages((prev) => mergeById(prev, [m]));
-          }
-        } else {
-          setError(d.error ?? t('chat.sendFailed'));
-        }
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok || !result.message) throw new Error(result.error ?? t('chat.sendFailed'));
+        setMessages((previous) => mergeById(previous.filter((message) => message.id !== temporaryId), [result.message as ChatMessage]));
       })
-      .catch(() => setError(t('chat.sendFailed')))
+      .catch((sendError: unknown) => {
+        setMessages((previous) => previous.filter((message) => message.id !== temporaryId));
+        setDraft(content);
+        setTags(sentTags);
+        setError(sendError instanceof Error ? sendError.message : t('chat.sendFailed'));
+      })
       .finally(() => setBusy(false));
   };
 
@@ -203,6 +231,29 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
         className={'dsh-access-chat-fab' + (shaking ? ' shaking' : '')}
         aria-label={t('chat.open')}
         title={t('chat.open')}
+        style={position ?? undefined}
+        onPointerDown={(event) => {
+          if (event.button !== 1) return;
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const rect = event.currentTarget.getBoundingClientRect();
+          dragRef.current = { x: event.clientX, y: event.clientY, left: rect.left, bottom: window.innerHeight - rect.bottom };
+          draggedRef.current = false;
+        }}
+        onPointerMove={(event) => {
+          const drag = dragRef.current;
+          if (!drag) return;
+          const dx = event.clientX - drag.x;
+          const dy = event.clientY - drag.y;
+          if (Math.hypot(dx, dy) > 4) draggedRef.current = true;
+          setPosition({ left: Math.max(0, drag.left + dx), bottom: Math.max(0, drag.bottom - dy) });
+        }}
+        onPointerUp={(event) => {
+          if (!dragRef.current) return;
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          dragRef.current = null;
+          if (me && position) localStorage.setItem(`dsh-access-chat-position:${me.id}`, JSON.stringify(position));
+        }}
         onClick={openPanel}
       >
         <span className="dsh-access-chat-fab-inner">
@@ -241,7 +292,8 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
               {messages.map((m) => {
                 const mine = me ? m.sender_id === me.id : false;
                 return (
-                  <div key={m.id} className={'dsh-access-chat-msg' + (mine ? ' mine' : '')}>
+                  <div key={m.id} className={'dsh-access-chat-msg' + (mine ? ' mine' : '') + (m.optimistic ? ' optimistic' : '')}>
+                    <span className="dsh-access-chat-avatar" aria-hidden="true">{(m.sender_name || '?').slice(0, 1).toUpperCase()}</span>
                     <div className="dsh-access-chat-meta">
                       <span className="dsh-access-chat-author">{mine ? t('chat.you') : m.sender_name}</span>
                       <span className="dsh-access-chat-time">{fmtTime(m.created_at)}</span>
@@ -321,6 +373,8 @@ const CHAT_CSS = `
 .dsh-access-chat-empty{color:var(--dsw-alias-label-tertiary);font-size:13px;text-align:center;margin:auto}
 .dsh-access-chat-msg{align-self:flex-start;max-width:78%;padding:9px 12px;border-radius:12px;background:var(--dsw-alias-bg-layer-3);border:1px solid var(--dsw-alias-border-l2);animation:dshaccessMsgIn .28s cubic-bezier(.16,1,.3,1)}
 .dsh-access-chat-msg.mine{align-self:flex-end;background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 30%,transparent);animation:dshaccessMsgMineIn .28s cubic-bezier(.16,1,.3,1)}
+.dsh-access-chat-msg.optimistic{opacity:.65}
+.dsh-access-chat-avatar{float:left;width:22px;height:22px;margin:0 7px 2px 0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--dsw-alias-brand-primary);color:#fff;font-size:11px;font-weight:700}
 .dsh-access-chat-meta{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
 .dsh-access-chat-author{font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
 .dsh-access-chat-time{font-size:11px;color:var(--dsw-alias-label-tertiary)}
@@ -342,6 +396,7 @@ const CHAT_CSS = `
 @keyframes dshaccessMsgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes dshaccessMsgMineIn{from{opacity:0;transform:translateY(8px) translateX(8px)}to{opacity:1;transform:none}}
 @keyframes dshaccessShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+@media (prefers-reduced-motion: reduce){.dsh-access-chat-fab,.dsh-access-chat-backdrop,.dsh-access-chat-panel,.dsh-access-chat-msg{animation:none!important;transition:none!important}}
 @media (max-width: 640px){
   .dsh-access-chat-fab{left:max(14px,env(safe-area-inset-left));bottom:calc(116px + env(safe-area-inset-bottom));width:44px;height:44px}
   .dsh-access-chat-panel{width:calc(100vw - 20px);height:min(680px,calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)))}
