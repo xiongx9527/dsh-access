@@ -8,6 +8,7 @@ import { createSecureContext } from 'node:tls';
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
+import dns from 'node:dns';
 import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import jwt from 'jsonwebtoken';
@@ -52,6 +53,7 @@ import { markGatewayProxyHeaders } from './local-access.js';
 import { readCookie } from './cookie.js';
 import { classifyGatewayPath } from './gateway-path.js';
 import { sanitizeJsonStrings, sanitizeText } from './content-sanitization.js';
+import { sshHostRequestAllowed } from './ssrf-policy.js';
 
 /** 网关内部扩展请求：权限执行时把用户/权限附在 req 上，供后续中间件与代理读取 */
 type Req = Request & {
@@ -2120,8 +2122,11 @@ export function createGatewayServer(
       reqAs.dshAccessPerms.sandbox_mode !== null &&
       (req.method === 'POST' || req.method === 'PUT') &&
       /^\/api\/respond$/.test(parsedUrl.pathname);
+    const needsSshHostCheck =
+      (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') &&
+      /^\/api\/dsh-ssh[.\/](hosts|test)([.\/]|$)/.test(parsedUrl.pathname);
 
-    if (needsFolderCheck || needsTransferCheck || needsSandboxCheck || needsCommandCheck || needsApprovalCheck) {
+    if (needsFolderCheck || needsTransferCheck || needsSandboxCheck || needsCommandCheck || needsApprovalCheck || needsSshHostCheck) {
       const chunks: Buffer[] = [];
       let size = 0;
       let settled = false;
@@ -2147,6 +2152,18 @@ export function createGatewayServer(
           bodyObj = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
         } catch {
           bodyObj = null;
+        }
+
+        if (needsSshHostCheck) {
+          const allowed = await sshHostRequestAllowed(req.method, parsedUrl.pathname, bodyObj, async (hostname) => {
+            const addresses = await dns.promises.lookup(hostname, { all: true, verbatim: true });
+            return addresses.map((address) => address.address);
+          });
+          if (!allowed) {
+            upstreamReq.destroy();
+            res.status(403).type('html').send(forbiddenPage(lang, t(lang, 'gw.folderDenied')));
+            return;
+          }
         }
 
         if (needsTransferCheck) {
