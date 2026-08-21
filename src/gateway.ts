@@ -50,6 +50,7 @@ import { UserConnectionRegistry } from './connection-registry.js';
 import { authorizeFilesystemPath } from './path-policy.js';
 import { markGatewayProxyHeaders } from './local-access.js';
 import { readCookie } from './cookie.js';
+import { classifyGatewayPath } from './gateway-path.js';
 
 /** 网关内部扩展请求：权限执行时把用户/权限附在 req 上，供后续中间件与代理读取 */
 type Req = Request & {
@@ -563,6 +564,14 @@ export function createGatewayServer(
   const app = express();
   // 不泄露框架信息
   app.disable('x-powered-by');
+  // 保留 /gateway 命名空间：编码/压平变形与未知自有路由不得落入上游 SPA fallback。
+  app.use((req, res, next) => {
+    if (classifyGatewayPath(req.url ?? '/') === 'reject') {
+      res.status(404).type('text/plain').send('404 Not Found');
+      return;
+    }
+    next();
+  });
   // 仅解析 /gateway 表单请求；代理请求的 body 必须原样透传给上游
   // （全局 express.json/urlencoded 会消费掉请求流，导致上游收到空 body）
   app.use('/gateway', express.urlencoded({ extended: false }));
@@ -2313,7 +2322,7 @@ export function createGatewayServer(
   // ── WebSocket 升级代理（dsh 前端依赖 WS 通信） ──────────────
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-    if (url.pathname.startsWith('/gateway/')) {
+    if (classifyGatewayPath(req.url ?? '/') !== 'upstream') {
       socket.destroy();
       return;
     }
