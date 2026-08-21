@@ -129,6 +129,27 @@ test('concurrent cloudflared downloads for one home share one transaction', asyn
   assert.equal(calls, 1);
 });
 
+test('a later singleflight caller can cancel its own wait', async () => {
+  let calls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const operation = async () => { calls += 1; await gate; return '/tmp/cloudflared'; };
+  const first = withCloudflaredDownload('/tmp/cancellable-home', operation);
+  const controller = new AbortController();
+  const second = withCloudflaredDownload('/tmp/cancellable-home', operation, controller.signal);
+  controller.abort(new Error('caller cancelled'));
+  await assert.rejects(second, /caller cancelled/);
+  release();
+  assert.equal(await first, '/tmp/cloudflared');
+  assert.equal(calls, 1);
+});
+
+test('verified cache replacement does not move the canonical executable away first', () => {
+  const tunnelSource = readFileSync(new URL('../src/tunnel.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(tunnelSource, /renameSync\(executable, backup\)/);
+  assert.match(tunnelSource, /renameSync\(candidate, executable\)/);
+});
+
 test('cloudflared download failures do not expose mirror query secrets', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dshpw-cloudflared-secret-'));
   const previousPath = process.env.PATH;

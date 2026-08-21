@@ -14,6 +14,8 @@ test('chat launcher loads the account preference and the access page can restore
   const card = readFileSync(new URL('../src/client/card.tsx', import.meta.url), 'utf8');
   assert.match(chat, /\/gateway\/api\/chat-settings/);
   assert.match(chat, /if \(chatEnabled !== true\) return null/);
+  assert.match(chat, /dsh-access-chat-enabled/);
   assert.match(card, /chatEnabled/);
   assert.match(card, /\/gateway\/api\/chat-settings/);
+  assert.match(card, /dsh-access-chat-enabled/);
 });

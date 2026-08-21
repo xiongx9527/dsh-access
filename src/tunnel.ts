@@ -128,12 +128,26 @@ export async function streamDownloadToFile(response: Response, destination: stri
   }
 }
 
-export function withCloudflaredDownload(home: string, operation: () => Promise<string>): Promise<string> {
+function waitWithCallerCancellation(pending: Promise<string>, signal?: AbortSignal): Promise<string> {
+  if (!signal) return pending;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<string>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    const cleanup = () => signal.removeEventListener('abort', onAbort);
+    signal.addEventListener('abort', onAbort, { once: true });
+    pending.then(
+      (value) => { cleanup(); resolve(value); },
+      (error) => { cleanup(); reject(error); },
+    );
+  });
+}
+
+export function withCloudflaredDownload(home: string, operation: () => Promise<string>, signal?: AbortSignal): Promise<string> {
   const current = downloads.get(home);
-  if (current) return current;
+  if (current) return waitWithCallerCancellation(current, signal);
   const pending = operation().finally(() => { downloads.delete(home); });
   downloads.set(home, pending);
-  return pending;
+  return waitWithCallerCancellation(pending, signal);
 }
 
 async function verifyDownloadedExecutable(file: string): Promise<void> {
@@ -168,16 +182,9 @@ function findExtractedBinary(directoryPath: string): string | null {
 }
 
 function replaceExecutable(candidate: string, executable: string): void {
-  const backup = `${executable}.replace-backup-${process.pid}-${Date.now()}`;
-  const hadExisting = existsSync(executable);
-  try {
-    if (hadExisting) renameSync(executable, backup);
-    renameSync(candidate, executable);
-    rmSync(backup, { force: true });
-  } catch (error) {
-    if (!existsSync(executable) && existsSync(backup)) renameSync(backup, executable);
-    throw error;
-  }
+  // POSIX rename replaces an existing destination atomically, so the canonical
+  // path always names either the previous verified binary or the new one.
+  renameSync(candidate, executable);
 }
 
 async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promise<string> {
@@ -265,7 +272,7 @@ async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promis
 }
 
 export function ensureCloudflared(home: string, signal?: AbortSignal): Promise<string> {
-  return withCloudflaredDownload(home, () => ensureCloudflaredOnce(home, signal));
+  return withCloudflaredDownload(home, () => ensureCloudflaredOnce(home, signal), signal);
 }
 
 export interface CloudflaredTunnelOptions {

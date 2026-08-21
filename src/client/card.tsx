@@ -262,13 +262,23 @@ export function AccessManagementSection(props: PropsLocale<'dshaccess'>) {
     }, t('reloading'));
   };
 
+  const publishChatPreference = (enabled: boolean) => {
+    window.dispatchEvent(new CustomEvent('dsh-access-chat-enabled', { detail: { enabled } }));
+  };
+
   const saveChatPreference = (enabled: boolean) => {
     setChatEnabled(enabled);
+    publishChatPreference(enabled);
     void fetch('/gateway/api/chat-settings', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ enabled }),
-    }).catch(() => setChatEnabled(!enabled));
+    }).then((response) => {
+      if (!response.ok) throw new Error('chat preference update failed');
+    }).catch(() => {
+      setChatEnabled(!enabled);
+      publishChatPreference(!enabled);
+    });
   };
 
   const saveGatewayPort = () => {

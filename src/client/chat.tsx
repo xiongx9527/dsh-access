@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 import { nextChatPollState, pollUrl, type ChatPollState } from '../chat-polling.js';
 
-interface ChatMessage {
+export interface ChatMessage {
   id: number;
   sender_id: number;
   sender_name: string;
@@ -49,11 +49,14 @@ function haptic(duration = 10): void {
   if (typeof navigator.vibrate === 'function') navigator.vibrate(duration);
 }
 
-function mergeById(prev: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+export function mergeById(prev: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const map = new Map<number, ChatMessage>();
   for (const m of prev) map.set(m.id, m);
   for (const m of incoming) map.set(m.id, m);
-  return [...map.values()].sort((a, b) => a.id - b.id).slice(-200);
+  const messages = [...map.values()];
+  const optimistic = messages.filter((message) => message.optimistic).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const confirmed = messages.filter((message) => !message.optimistic).sort((a, b) => a.id - b.id);
+  return [...confirmed.slice(-Math.max(0, 200 - optimistic.length)), ...optimistic.slice(-200)];
 }
 
 /** 聊天入口 + 面板（挂在 shell.overlay 槽） */
@@ -81,11 +84,20 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
 
   useEffect(() => {
     let active = true;
+    let preferenceChanged = false;
+    const onPreference = (event: Event) => {
+      preferenceChanged = true;
+      setChatEnabled((event as CustomEvent<{ enabled: boolean }>).detail.enabled);
+    };
+    window.addEventListener('dsh-access-chat-enabled', onPreference);
     fetch('/gateway/api/chat-settings')
       .then((response) => response.json())
-      .then((data) => { if (active) setChatEnabled(data.chatEnabled !== false); })
-      .catch(() => { if (active) setChatEnabled(false); });
-    return () => { active = false; };
+      .then((data) => { if (active && !preferenceChanged) setChatEnabled(data.chatEnabled !== false); })
+      .catch(() => { if (active && !preferenceChanged) setChatEnabled(false); });
+    return () => {
+      active = false;
+      window.removeEventListener('dsh-access-chat-enabled', onPreference);
+    };
   }, []);
 
   useEffect(() => {
