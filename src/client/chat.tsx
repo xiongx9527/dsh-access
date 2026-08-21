@@ -44,6 +44,11 @@ function fmtTime(iso: string): string {
   return `${hh}:${mm}`;
 }
 
+function haptic(duration = 10): void {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  if (typeof navigator.vibrate === 'function') navigator.vibrate(duration);
+}
+
 function mergeById(prev: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const map = new Map<number, ChatMessage>();
   for (const m of prev) map.set(m.id, m);
@@ -180,6 +185,7 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
       draggedRef.current = false;
       return;
     }
+    haptic();
     setOpen(true);
     setUnread(0);
   };
@@ -213,6 +219,7 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok || !result.message) throw new Error(result.error ?? t('chat.sendFailed'));
         setMessages((previous) => mergeById(previous.filter((message) => message.id !== temporaryId), [result.message as ChatMessage]));
+        haptic(8);
       })
       .catch((sendError: unknown) => {
         setMessages((previous) => previous.filter((message) => message.id !== temporaryId));

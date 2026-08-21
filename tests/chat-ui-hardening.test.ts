@@ -19,6 +19,8 @@ test('chat messages render avatars and optimistic sends recover on failure', () 
   assert.match(source, /temporaryId/);
 });
 
-test('chat animation is disabled for reduced-motion users', () => {
+test('chat animation and optional haptics honor reduced-motion preference', () => {
   assert.match(source, /prefers-reduced-motion: reduce/);
+  assert.match(source, /navigator\.vibrate/);
+  assert.match(source, /prefers-reduced-motion: reduce.*matches/s);
 });
