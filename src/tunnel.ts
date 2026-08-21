@@ -162,15 +162,21 @@ export function withCloudflaredDownload(
   operation: (signal: AbortSignal) => Promise<string>,
   signal?: AbortSignal,
 ): Promise<string> {
+  if (signal?.aborted) return Promise.reject(signal.reason);
   let shared = downloads.get(home);
+  if (shared?.controller.signal.aborted) {
+    downloads.delete(home);
+    shared = undefined;
+  }
   if (!shared) {
     const controller = new AbortController();
-    shared = { promise: Promise.resolve(''), controller, waiters: 0, settled: false };
-    shared.promise = operation(controller.signal).finally(() => {
-      shared!.settled = true;
-      downloads.delete(home);
+    const created: SharedDownload = { promise: Promise.resolve(''), controller, waiters: 0, settled: false };
+    created.promise = operation(controller.signal).finally(() => {
+      created.settled = true;
+      if (downloads.get(home) === created) downloads.delete(home);
     });
-    downloads.set(home, shared);
+    downloads.set(home, created);
+    shared = created;
   }
   return waitWithCallerCancellation(shared, signal);
 }

@@ -152,7 +152,8 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
               pollStateRef.current = transition.state;
               lastSeenId.current = transition.state.lastSeenId;
               replaceMessages = transition.replaceMessages;
-              if (transition.unread > 0) setUnread((count) => count + transition.unread);
+              if (transition.resetUnread) setUnread(0);
+              else if (transition.unread > 0) setUnread((count) => count + transition.unread);
               if (transition.state.rebuilding) {
                 window.setTimeout(load, 0);
                 return;

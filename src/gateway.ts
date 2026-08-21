@@ -515,7 +515,7 @@ function addVary(headers: Record<string, string | string[] | undefined>, value: 
 export function shouldRewriteHtmlResponse(method: string, pathname: string, contentType: string): boolean {
   if (!contentType.includes('text/html')) return false;
   if (isAionuiFileRead(method, pathname)) return false;
-  if (method === 'GET' && /^\/api\/dsh-uploads(?:[.\/]download)$/.test(pathname)) return false;
+  if (method === 'GET' && /^\/api\/(?:dsh-uploads|dsh-ssh)(?:[.\/]download)$/.test(pathname)) return false;
   return true;
 }
 

@@ -20,9 +20,14 @@ export function nextChatPollState(
   epoch: string,
   currentUserId: number,
   panelOpen: boolean,
-): { state: ChatPollState; unread: number; replaceMessages: boolean } {
+): { state: ChatPollState; unread: number; replaceMessages: boolean; resetUnread: boolean } {
   if (!state.rebuilding && state.initialized && (latestId < state.lastSeenId || (state.epoch !== null && epoch !== state.epoch))) {
-    return { state: { initialized: true, lastSeenId: 0, rebuilding: true, epoch }, unread: 0, replaceMessages: false };
+    return {
+      state: { initialized: true, lastSeenId: 0, rebuilding: true, epoch },
+      unread: 0,
+      replaceMessages: false,
+      resetUnread: true,
+    };
   }
   const establishingBaseline = state.rebuilding || !state.initialized;
   const maxIncoming = messages.reduce((max, message) => Math.max(max, message.id), 0);
@@ -34,5 +39,6 @@ export function nextChatPollState(
     state: { initialized: true, lastSeenId: cursor, rebuilding: false, epoch },
     unread,
     replaceMessages: establishingBaseline,
+    resetUnread: state.rebuilding,
   };
 }

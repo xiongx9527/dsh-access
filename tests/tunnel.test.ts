@@ -183,6 +183,39 @@ test('aborting the first singleflight caller does not cancel a later active wait
   assert.equal(await second, '/tmp/cloudflared');
 });
 
+test('a caller arriving after all waiters cancel starts a fresh transaction', async () => {
+  let calls = 0;
+  let rejectAborted!: (error: Error) => void;
+  const controller = new AbortController();
+  const first = withCloudflaredDownload('/tmp/restart-cancelled-home', async (signal) => {
+    calls += 1;
+    return new Promise<string>((_resolve, reject) => {
+      rejectAborted = reject;
+      signal.addEventListener('abort', () => queueMicrotask(() => reject(signal.reason)), { once: true });
+    });
+  }, controller.signal);
+  controller.abort(new Error('first cancelled'));
+  await assert.rejects(first, /first cancelled/);
+  const second = withCloudflaredDownload('/tmp/restart-cancelled-home', async () => {
+    calls += 1;
+    return '/tmp/new-cloudflared';
+  });
+  assert.equal(await second, '/tmp/new-cloudflared');
+  assert.equal(calls, 2);
+  void rejectAborted;
+});
+
+test('a pre-aborted first caller does not start a shared transaction', async () => {
+  let calls = 0;
+  const controller = new AbortController();
+  controller.abort(new Error('already cancelled'));
+  await assert.rejects(
+    withCloudflaredDownload('/tmp/pre-aborted-home', async () => { calls += 1; return '/tmp/cloudflared'; }, controller.signal),
+    /already cancelled/,
+  );
+  assert.equal(calls, 0);
+});
+
 test('verified cache replacement does not move the canonical executable away first', () => {
   const tunnelSource = readFileSync(new URL('../src/tunnel.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(tunnelSource, /renameSync\(executable, backup\)/);

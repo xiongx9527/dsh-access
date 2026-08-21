@@ -32,11 +32,13 @@ test('database id rollback schedules one full baseline rebuild without phantom u
   const state: ChatPollState = { initialized: true, lastSeenId: 99, rebuilding: false, epoch: 'db-a' };
   const rollback = nextChatPollState(state, [], 3, 'db-b', 7, false);
   assert.deepEqual(rollback.state, { initialized: true, lastSeenId: 0, rebuilding: true, epoch: 'db-b' });
+  assert.equal(rollback.resetUnread, true);
   assert.equal(pollUrl(rollback.state), '/gateway/api/messages');
   const rebuilt = nextChatPollState(rollback.state, [{ id: 1, sender_id: 8 }, { id: 3, sender_id: 8 }], 3, 'db-b', 7, false);
   assert.equal(rebuilt.unread, 0);
   assert.deepEqual(rebuilt.state, { initialized: true, lastSeenId: 3, rebuilding: false, epoch: 'db-b' });
   assert.equal(rebuilt.replaceMessages, true);
+  assert.equal(rebuilt.resetUnread, true);
 });
 
 test('open chat panels do not accrue unread messages', () => {
