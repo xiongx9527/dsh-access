@@ -18,36 +18,35 @@ const GATEWAY_ROUTES: readonly Route[] = [
 
 function rawPathOf(requestTarget: string): string {
   if (/^https?:\/\//i.test(requestTarget)) {
-    const authorityEnd = requestTarget.indexOf('/', requestTarget.indexOf('//') + 2);
-    if (authorityEnd < 0) return '/';
-    return requestTarget.slice(authorityEnd).split(/[?#]/, 1)[0] || '/';
+    const authorityStart = requestTarget.indexOf('//') + 2;
+    const delimiter = requestTarget.slice(authorityStart).search(/[/?#]/);
+    if (delimiter < 0 || requestTarget[authorityStart + delimiter] !== '/') return '/';
+    return requestTarget.slice(authorityStart + delimiter).split(/[?#]/, 1)[0] || '/';
   }
   return requestTarget.split(/[?#]/, 1)[0] || '/';
 }
 
-function decodePath(rawPath: string): { decoded: string; malformed: boolean } {
+function decodeAsciiEscapes(rawPath: string): { decoded: string; exhausted: boolean } {
   let decoded = rawPath;
-  for (let index = 0; index < 3; index += 1) {
-    try {
-      const next = decodeURIComponent(decoded);
-      if (next === decoded) break;
-      decoded = next;
-    } catch {
-      return { decoded, malformed: true };
-    }
+  for (let index = 0; index < 16; index += 1) {
+    const next = decoded.replace(/%([0-7][0-9a-f])/gi, (_escape, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)));
+    if (next === decoded) return { decoded, exhausted: false };
+    decoded = next;
   }
-  return { decoded, malformed: false };
+  return { decoded, exhausted: /%([0-7][0-9a-f])/i.test(decoded) };
 }
 
 /** Keep the reserved /gateway namespace out of the upstream SPA fallback. */
 export function classifyGatewayRequestTarget(method: string, requestTarget: string): GatewayPathClass {
+  // Only origin-form and well-formed HTTP absolute-form targets are supported. WHATWG treats
+  // backslashes and extra leading slashes as separators, so forwarding those is ambiguous.
   if (requestTarget.includes('\\') || requestTarget.startsWith('//') || /^https?:\/{3,}/i.test(requestTarget)) {
-    const slashTarget = requestTarget.replace(/\\/g, '/');
-    const decodedTarget = decodePath(slashTarget);
-    if (/(?:^|\/)gateway(?:\/|$)/.test(decodedTarget.decoded)) return 'reject';
+    return 'reject';
   }
   const rawPath = rawPathOf(requestTarget);
-  const { decoded, malformed } = decodePath(rawPath);
+  const { decoded, exhausted } = decodeAsciiEscapes(rawPath);
+  if (exhausted || decoded.includes('\\')) return 'reject';
   const rawClaimsGateway = /^\/gateway(?:\/|$)/.test(rawPath);
   const decodedClaimsGateway = /^\/gateway(?:\/|$)/.test(decoded);
   let normalized: string;
@@ -58,7 +57,7 @@ export function classifyGatewayRequestTarget(method: string, requestTarget: stri
   }
   const normalizedClaimsGateway = normalized === '/gateway' || normalized.startsWith('/gateway/');
   if (!rawClaimsGateway && !decodedClaimsGateway && !normalizedClaimsGateway) return 'upstream';
-  if (malformed || rawPath !== normalized) return 'reject';
+  if (rawPath !== normalized) return 'reject';
   const upperMethod = method.toUpperCase();
   return GATEWAY_ROUTES.some((route) => route.methods.includes(upperMethod) && route.path.test(normalized))
     ? 'gateway'
