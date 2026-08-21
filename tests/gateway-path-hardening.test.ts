@@ -74,6 +74,8 @@ test('ASCII controls cannot obscure any part of the gateway namespace', () => {
       assert.equal(classifyGatewayRequestTarget('GET', `/${obscured}%80/../api/session.list`), 'reject');
       assert.equal(classifyGatewayRequestTarget('GET', `/${obscured}%2580/../api/session.list`), 'reject');
       assert.equal(classifyGatewayRequestTarget('GET', `/${obscured}%25c2/../api/session.list`), 'reject');
+      assert.equal(classifyGatewayRequestTarget('GET', `/${obscured}%25/../api/session.list`), 'reject');
+      assert.equal(classifyGatewayRequestTarget('GET', `/${obscured}%2525zz/../api/session.list`), 'reject');
     }
   }
 });

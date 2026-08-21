@@ -52,7 +52,8 @@ function claimsGatewayNamespace(pathname: string, rejectMalformedSuffix = false)
   for (const segment of pathname.split('/')) {
     if (!segment || segment === '.') continue;
     if (segment === '..') {
-      stack.pop();
+      const removed = stack.pop();
+      if (removed?.replace(/[\u0000-\u001f\u007f]/g, '').toLowerCase().startsWith('gateway')) return true;
       continue;
     }
     const withoutControls = segment.replace(/[\u0000-\u001f\u007f]/g, '');

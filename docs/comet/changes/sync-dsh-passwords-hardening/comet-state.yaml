@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 59
+state_version: 63
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,11 +29,11 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 15
+  iteration: 16
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 13
-  no_progress_count: 7
+  failed_iteration_count: 14
+  no_progress_count: 8
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
@@ -632,6 +632,32 @@ history:
         UTF-8 percent suffixes revealed after decoding.
       truncated: false
     completed_at: 2026-08-21T10:27:18.141Z
+  - goal_cycle: 2
+    iteration: 15
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A32
+    summary:
+      text: 第15轮第1次独立只读验证失败：A1-A41 中 39 项 passed，A2/A32 failed，0 blocked。HEAD 0a8b8a8
+        通过 Runtime 的 178/178 测试、构建、diff、scope 和 package 门禁；405,504 项控制矩阵、79,776
+        项合法编码邻接矩阵和 73,920 项单层畸形后缀矩阵均通过，嵌套 `%2580`/`%25c2` 无效字节类也已修复。但完整嵌套畸形后缀矩阵
+        443,520 项中仍有 323,400 项错误分类为 upstream，集中于迭代解码后出现的
+        `%`、`%z`、`%zz`、`%0`、`%7`、`%gg`、`%2x`，故编码/双编码 gateway 变形尚未完全 fail-closed。
+      truncated: false
+    completed_at: 2026-08-21T10:33:23.045Z
+  - goal_cycle: 2
+    iteration: 15
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: User authorized continuation; revise implementation so any
+        gateway-prefixed segment removed by parent traversal is reserved
+        regardless of nested malformed suffix syntax.
+      truncated: false
+    completed_at: 2026-08-21T10:33:24.284Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null
