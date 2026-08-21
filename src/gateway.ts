@@ -512,6 +512,17 @@ function addVary(headers: Record<string, string | string[] | undefined>, value: 
   }
 }
 
+/** Remove framing and encoding headers whose values describe the replaced body. */
+export function headersForRewrittenBody(
+  headers: Record<string, string | string[] | undefined>,
+): Record<string, string | string[] | undefined> {
+  const outputHeaders = { ...headers };
+  delete outputHeaders['content-length'];
+  delete outputHeaders['transfer-encoding'];
+  delete outputHeaders['content-encoding'];
+  return outputHeaders;
+}
+
 /** Compress a complete response after all gateway filtering and rewriting. */
 export function compressResponseBody(
   req: Pick<IncomingMessage, 'headers'>,
@@ -1878,9 +1889,7 @@ export function createGatewayServer(
               const html = body.toString('utf8');
               const injected = html.replace(/<head[^>]*>/i, (match) => match + INJECT_SCRIPT);
               let out = Buffer.from(injected, 'utf8');
-              const respHeaders: Record<string, string | string[] | undefined> = { ...upstreamRes.headers };
-              delete respHeaders['content-length'];
-              delete respHeaders['content-encoding'];
+              const respHeaders = headersForRewrittenBody(upstreamRes.headers);
               // 代理层补齐防嵌框头（dsh 应用自身未设置）：
               // 允许同源内嵌（dsh 内部如有同源 iframe 不受影响），禁止跨站嵌框
               respHeaders['x-frame-options'] = 'SAMEORIGIN';

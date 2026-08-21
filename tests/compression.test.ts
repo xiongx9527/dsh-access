@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { compressResponseBody, requestedCompression, shouldBufferForCompression } from '../src/gateway.js';
+import { compressResponseBody, headersForRewrittenBody, requestedCompression, shouldBufferForCompression } from '../src/gateway.js';
 
 const body = Buffer.from(JSON.stringify({ values: Array.from({ length: 700 }, (_, index) => ({ index, value: 'repeatable remote response payload' })) }), 'utf8');
 
@@ -41,6 +41,19 @@ test('rewritten bodies never retain transfer-encoding beside content-length', ()
   );
   assert.equal(result.headers['content-length'], '2');
   assert.equal(result.headers['transfer-encoding'], undefined);
+});
+
+test('rewritten response headers remove all stale body framing and encoding', () => {
+  const result = headersForRewrittenBody({
+    'content-length': '999',
+    'transfer-encoding': 'chunked',
+    'content-encoding': 'gzip',
+    'content-type': 'text/html',
+  });
+  assert.equal(result['content-length'], undefined);
+  assert.equal(result['transfer-encoding'], undefined);
+  assert.equal(result['content-encoding'], undefined);
+  assert.equal(result['content-type'], 'text/html');
 });
 
 test('compression honors q=0 exclusions', () => {
