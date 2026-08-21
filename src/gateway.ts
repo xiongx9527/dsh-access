@@ -512,6 +512,13 @@ function addVary(headers: Record<string, string | string[] | undefined>, value: 
   }
 }
 
+export function shouldRewriteHtmlResponse(method: string, pathname: string, contentType: string): boolean {
+  if (!contentType.includes('text/html')) return false;
+  if (isAionuiFileRead(method, pathname)) return false;
+  if (method === 'GET' && /^\/api\/dsh-uploads(?:[.\/]download)$/.test(pathname)) return false;
+  return true;
+}
+
 /** Remove framing and encoding headers whose values describe the replaced body. */
 export function headersForRewrittenBody(
   headers: Record<string, string | string[] | undefined>,
@@ -1879,7 +1886,7 @@ export function createGatewayServer(
         const encoding = String(upstreamRes.headers['content-encoding'] ?? '');
 
         // ── HTML 响应：缓冲 + 注入兼容脚本（crypto.randomUUID polyfill 等） ──
-        if (contentType.includes('text/html')) {
+        if (shouldRewriteHtmlResponse(req.method, parsedUrl.pathname, contentType)) {
           const chunks: Buffer[] = [];
           upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
           upstreamRes.on('end', () => {

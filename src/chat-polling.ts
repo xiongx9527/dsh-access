@@ -8,7 +8,9 @@ export interface ChatPollState {
 export interface PollMessage { id: number; sender_id: number }
 
 export function pollUrl(state: ChatPollState): string {
-  return state.rebuilding ? '/gateway/api/messages' : `/gateway/api/messages?since=${state.lastSeenId}`;
+  return state.rebuilding || !state.initialized
+    ? '/gateway/api/messages'
+    : `/gateway/api/messages?since=${state.lastSeenId}`;
 }
 
 export function nextChatPollState(
@@ -18,14 +20,19 @@ export function nextChatPollState(
   epoch: string,
   currentUserId: number,
   panelOpen: boolean,
-): { state: ChatPollState; unread: number } {
+): { state: ChatPollState; unread: number; replaceMessages: boolean } {
   if (!state.rebuilding && state.initialized && (latestId < state.lastSeenId || (state.epoch !== null && epoch !== state.epoch))) {
-    return { state: { initialized: true, lastSeenId: 0, rebuilding: true, epoch }, unread: 0 };
+    return { state: { initialized: true, lastSeenId: 0, rebuilding: true, epoch }, unread: 0, replaceMessages: false };
   }
+  const establishingBaseline = state.rebuilding || !state.initialized;
   const maxIncoming = messages.reduce((max, message) => Math.max(max, message.id), 0);
-  const cursor = messages.length > 0 ? maxIncoming : (state.rebuilding || !state.initialized ? latestId : state.lastSeenId);
-  const unread = !state.initialized || state.rebuilding || panelOpen
+  const cursor = establishingBaseline ? latestId : (messages.length > 0 ? maxIncoming : state.lastSeenId);
+  const unread = establishingBaseline || panelOpen
     ? 0
     : messages.filter((message) => message.id > state.lastSeenId && message.sender_id !== currentUserId).length;
-  return { state: { initialized: true, lastSeenId: cursor, rebuilding: false, epoch }, unread };
+  return {
+    state: { initialized: true, lastSeenId: cursor, rebuilding: false, epoch },
+    unread,
+    replaceMessages: establishingBaseline,
+  };
 }

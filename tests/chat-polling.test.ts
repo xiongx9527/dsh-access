@@ -5,10 +5,20 @@ import { nextChatPollState, pollUrl, type ChatPollState } from '../src/chat-poll
 const baseline: ChatPollState = { initialized: false, lastSeenId: 0, rebuilding: false, epoch: null };
 
 test('empty databases establish an incremental zero baseline instead of repeated full loads', () => {
+  assert.equal(pollUrl(baseline), '/gateway/api/messages');
   const next = nextChatPollState(baseline, [], 0, 'db-a', 7, false);
   assert.deepEqual(next.state, { initialized: true, lastSeenId: 0, rebuilding: false, epoch: 'db-a' });
   assert.equal(next.unread, 0);
   assert.equal(pollUrl(next.state), '/gateway/api/messages?since=0');
+});
+
+test('a nonempty initial history is a latest baseline with no unread count', () => {
+  const messages = Array.from({ length: 300 }, (_, index) => ({ id: 701 + index, sender_id: 8 }));
+  const next = nextChatPollState(baseline, messages, 1000, 'db-a', 7, false);
+  assert.equal(next.state.lastSeenId, 1000);
+  assert.equal(next.unread, 0);
+  assert.equal(next.replaceMessages, true);
+  assert.equal(pollUrl(next.state), '/gateway/api/messages?since=1000');
 });
 
 test('incremental messages advance the cursor and count only other senders', () => {
@@ -26,6 +36,7 @@ test('database id rollback schedules one full baseline rebuild without phantom u
   const rebuilt = nextChatPollState(rollback.state, [{ id: 1, sender_id: 8 }, { id: 3, sender_id: 8 }], 3, 'db-b', 7, false);
   assert.equal(rebuilt.unread, 0);
   assert.deepEqual(rebuilt.state, { initialized: true, lastSeenId: 3, rebuilding: false, epoch: 'db-b' });
+  assert.equal(rebuilt.replaceMessages, true);
 });
 
 test('open chat panels do not accrue unread messages', () => {

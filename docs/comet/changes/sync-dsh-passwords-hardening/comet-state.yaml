@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 14
+state_version: 17
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,21 +29,24 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 3
+  iteration: 4
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 1
-  no_progress_count: 0
+  failed_iteration_count: 2
+  no_progress_count: 1
   execution_failure_count: 0
   previous_unresolved_ids:
-    - A10
-    - A11
+    - A2
+    - A3
+    - A9
     - A12
-    - A13
-    - A15
-    - A17
+    - A18
+    - A20
     - A21
-    - A25
+    - A32
+    - A33
+    - A39
+    - A40
   next_action: repair-failed-acceptance
 acceptance:
   - id: A1
@@ -52,29 +55,32 @@ acceptance:
       不能认证，Gateway 与 Plugin 行为一致。
     result: passed
     reason:
-      text: src/cookie.ts implements shared exact-name, first-equals parsing with
-        ASCII space/tab trimming only; Gateway and Plugin both import it, and
-        cookie-hardening tests cover Unicode whitespace and embedded equals.
+      text: src/cookie.ts performs shared exact-name parsing, trims only ASCII
+        space/tab, splits at the first equals sign, preserves remaining equals,
+        and is used by both Gateway and Plugin; targeted tests cover Unicode
+        whitespace.
       truncated: false
   - id: A2
     source: brief.md
     text: A2：编码、双编码、压平和未知 `/gateway` 变形路径不能绕过登录门或代理到上游；合法 Gateway API 与本机 3080 行为不变。
-    result: passed
+    result: failed
     reason:
-      text: classifyGatewayRequestTarget runs before Gateway handlers and rejects
-        encoded, double-encoded, flattened, malformed, unknown, and wrong-method
-        /gateway targets; HTTP and WebSocket paths use it and targeted tests
-        pass.
+      text: "Preserve and validate the raw path of absolute-form request targets
+        before WHATWG URL normalization: classifyGatewayRequestTarget currently
+        classifies absolute targets such as
+        http://example.test/gateway/%2e%2e/api/session.list as upstream because
+        rawPathOf loses the original /gateway claim."
       truncated: false
   - id: A3
     source: brief.md
     text: A3：session history 和聊天写入中的隐藏 Unicode、危险 HTML/CSS
       在模型输入边界被净化，普通文本、换行和数学比较符保留；文件 `read/raw/download` 保真。
-    result: passed
+    result: failed
     reason:
-      text: Chat writes use sanitizeText and session.history recursively sanitizes
-        strings; ordinary line breaks/comparisons are tested, while
-        read/raw/download routes are not rewritten.
+      text: Exclude file-content read/raw/download responses from the generic
+        text/html injection branch in src/gateway.ts; an HTML file returned by
+        /aionui-panel/raw is currently modified by INJECT_SCRIPT, violating byte
+        fidelity.
       truncated: false
   - id: A4
     source: brief.md
@@ -82,10 +88,10 @@ acceptance:
       IPv6，以及任一解析结果为私网的 hostname；公网地址正常放行，DNS 失败时拒绝。
     result: passed
     reason:
-      text: ssrf-policy parses inet_aton IPv4 forms, IPv6 mapped/compatible/NAT64
-        forms, private/link-local/unspecified ranges, and rejects failed, empty,
-        or mixed-private DNS answers; Gateway rewrites an allowed hostname to
-        its resolved public address.
+      text: src/ssrf-policy.ts rejects required IPv4, inet_aton, IPv6
+        mapped/compatible, private, link-local and unspecified forms, fails
+        closed on DNS errors or mixed-private answers, and Gateway rewrites an
+        allowed hostname to its resolved public address.
       truncated: false
   - id: A5
     source: brief.md
@@ -93,10 +99,9 @@ acceptance:
       Content-Encoding；透明响应无回归。
     result: passed
     reason:
-      text: headersForRewrittenBody removes stale framing/encoding headers and
-        compressResponseBody always removes Transfer-Encoding before assigning
-        Content-Length; compression tests cover the invalid combinations and
-        Runtime tests passed.
+      text: headersForRewrittenBody removes stale length, transfer and content
+        encodings, while compressResponseBody always removes Transfer-Encoding
+        before assigning Content-Length; targeted header tests pass.
       truncated: false
   - id: A6
     source: brief.md
@@ -104,10 +109,10 @@ acceptance:
       不增加平行 ownership 表或判断路径。
     result: passed
     reason:
-      text: The diff adds no ownership table or parallel authorization mechanism and
-        retains the existing workspace filtering, session-scoped checks, sandbox
-        enforcement, and connection revocation paths; the capability-boundary
-        scan and full regressions passed.
+      text: The diff adds no parallel ownership table or authorization authority and
+        retains existing workspace/session filtering, sandbox enforcement and
+        active-connection revocation; the capability scan and full regressions
+        passed.
       truncated: false
   - id: A7
     source: brief.md
@@ -115,70 +120,69 @@ acceptance:
       workspace 目标缺失不阻塞核心补丁。
     result: passed
     reason:
-      text: Slot registrations now carry stable keys, rc.6 whitelist patching
-        preserves existing namespaces, rc.7 absence of WEB_SETTINGS_NAMESPACES
-        is treated as satisfied, and an absent optional workspace target does
-        not block core patching.
+      text: Stable slot keys were added, rc.6 whitelist entries are appended without
+        replacement, rc.7 whitelist absence is satisfied, and missing optional
+        workspace files do not block core patching.
       truncated: false
   - id: A8
     source: brief.md
     text: A8：workspace/session 搜索无结果可通过外部点击收起清空，浏览器自动填充不会污染搜索字段。
     result: passed
     reason:
-      text: The optional workspace patch clears and collapses a nonempty no-result
-        search on outside interaction and adds autocomplete=off with a dedicated
-        noncredential field name; rc compatibility tests exercise patching and
-        rollback.
+      text: The optional workspace patch clears and collapses a completed zero-result
+        search on outside interaction and adds autocomplete=off with a
+        noncredential field name.
       truncated: false
   - id: A9
     source: brief.md
     text: A9：聊天轮询使用 since 增量且不重叠；空数据库建立稳定基线，数据库重置或 ID 回退后重建基线且不产生 phantom 未读。
-    result: passed
+    result: failed
     reason:
-      text: Chat polling uses since cursors, an inFlight guard prevents overlap, and
-        state transitions cover empty baselines, epoch changes, ID rollback,
-        incremental paging, and phantom-unread suppression.
+      text: "Establish a nonempty baseline before using since: pollUrl emits ?since=0
+        while initialized is false, so databases with more than 300 visible
+        messages load the oldest page first and count subsequent preexisting
+        pages as unread. Initial polling should fetch the latest baseline and
+        set the cursor to latestId."
       truncated: false
   - id: A10
     source: brief.md
     text: A10：聊天入口默认显示并可按当前账号隐藏/恢复，隐藏不删除消息；拖动位置按账号持久化且不误触打开。
-    result: failed
+    result: passed
     reason:
-      text: "Make chat preference changes propagate to ChatLauncher immediately:
-        AccessManagementSection updates only its own state/server setting, while
-        ChatLauncher fetches the preference only once, so hiding or restoring
-        requires a remount/reload."
+      text: The mounted launcher now listens for dsh-access-chat-enabled events,
+        guards its initial fetch against races, and the settings page publishes
+        both optimistic changes and rollback; visibility and drag position
+        remain account-scoped without deleting messages.
       truncated: false
   - id: A11
     source: brief.md
     text: A11：聊天消息支持头像、发送者元信息、现有标签和乐观发送；失败可恢复并显示错误，动画/触感遵守减少动画偏好。
-    result: failed
+    result: passed
     reason:
-      text: "Preserve optimistic messages when the history already contains 200 items:
-        mergeById sorts the negative temporary ID first and slice(-200)
-        immediately discards it, so the required optimistic bubble is not
-        rendered at the configured cap."
+      text: mergeById reserves capped history space for optimistic messages, and
+        sending renders avatar/sender/tag metadata, replaces successful
+        temporary messages, and restores draft/tags with an error on failure.
       truncated: false
   - id: A12
     source: brief.md
     text: A12：cloudflared 下载支持总超时/取消和同一 home 单飞，按官方源后显式 HTTPS 镜像顺序回退，日志不泄露完整镜像 URL。
     result: failed
     reason:
-      text: "Honor every caller's AbortSignal during same-home singleflight:
-        withCloudflaredDownload returns an existing promise without observing a
-        later caller's signal, so that caller cannot cancel its wait and
-        cancellation semantics depend solely on the first caller."
+      text: "Decouple the shared download transaction from only the first caller's
+        AbortSignal, or reference-count waiters: aborting the first caller
+        currently aborts ensureCloudflaredOnce and rejects later non-aborted
+        callers sharing the same-home transaction."
       truncated: false
   - id: A13
     source: brief.md
     text: A13：cloudflared 响应流式写入唯一临时文件，小于 1 MiB、解压失败或 `--version`
       验证失败均被清理；仅验证成功后原子替换，既有有效缓存不被失败下载破坏。
-    result: failed
+    result: passed
     reason:
-      text: "Implement an actual atomic cache replacement: replaceExecutable first
-        renames the existing executable to a backup and only then renames the
-        candidate, leaving a crash window with no canonical executable rather
-        than atomically replacing it."
+      text: Downloads stream into per-attempt temporary directories, undersized or
+        invalid candidates are cleaned, candidates are type/permission/version
+        checked, and verified same-filesystem candidates replace the canonical
+        cache with renameSync.
       truncated: false
   - id: A14
     source: brief.md
@@ -186,75 +190,74 @@ acceptance:
       的现有测试无回归，完整测试与构建通过。
     result: passed
     reason:
-      text: Runtime evidence shows npm test passed 166/166, production build passed,
-        git diff --check passed, capability-boundary scan passed, and the
-        corrected package-notice-v2 check passed.
+      text: Reported runtime evidence passes npm test 169/169, production build, git
+        diff --check, forbidden-boundary scan and package-notice-v2.
       truncated: false
   - id: A15
     source: specs/chat-experience/spec.md
     text: 聊天入口默认显示，并允许当前访问管理账号在设置中隐藏/恢复；偏好由服务端按账号保存，消息数据不删除。
-    result: failed
+    result: passed
     reason:
-      text: Synchronize the server-backed per-account preference with the mounted
-        launcher; the settings checkbox currently cannot hide or restore
-        ChatLauncher until its one-time preference effect runs again after
-        remount/reload.
+      text: Chat visibility defaults enabled, is stored under
+        chat_enabled:<authenticated-user-id>, and now synchronizes immediately
+        between the mounted settings section and launcher without modifying
+        message records.
       truncated: false
   - id: A16
     source: specs/chat-experience/spec.md
     text: 聊天气泡支持拖动，位置保存在按当前账号命名的本地 UI 偏好中；点击打开不能被拖动误触发。
     result: passed
     reason:
-      text: Pointer drag state suppresses click opening after movement and persists
-        coordinates under dsh-access-chat-position:<account-id> in localStorage;
-        targeted UI tests cover these paths.
+      text: Pointer drag state uses a movement threshold to suppress opening and
+        persists coordinates under dsh-access-chat-position:<account-id>.
       truncated: false
   - id: A17
     source: specs/chat-experience/spec.md
     text: 消息气泡支持头像、发送者元信息、现有议题标签和乐观发送；发送失败恢复状态并显示错误。
-    result: failed
+    result: passed
     reason:
-      text: "Fix capped-history optimistic rendering: with 200 prior messages, the
-        negative temporary message is removed by sorted slice(-200), despite the
-        source containing recovery/error handling for other send failures."
+      text: Messages render avatars, sender metadata and tags; capped-history
+        optimistic messages remain visible, successful sends replace them, and
+        failed sends restore composer state and expose the error.
       truncated: false
   - id: A18
     source: specs/chat-experience/spec.md
     text: 保留 dsh-access 现有账号权限、消息 API、未读统计和移动端 safe-area/抽屉适配。
-    result: passed
+    result: failed
     reason:
-      text: Authenticated message visibility, sender filtering, unread handling,
-        existing tags, and mobile safe-area styles remain present; full account,
-        API, mobile, and connection regressions passed.
+      text: "Restore the prior unread baseline behavior for histories over 300
+        messages: starting with since=0 paginates old messages as if newly
+        arrived, regressing unread statistics even though recipient filtering
+        and mobile safe-area styling remain intact."
       truncated: false
   - id: A19
     source: specs/chat-experience/spec.md
     text: 触感反馈和动画仅作渐进增强，并遵守 `prefers-reduced-motion`。
     result: passed
     reason:
-      text: Haptics are feature-detected and skipped under prefers-reduced-motion, and
-        the reduced-motion media rule disables launcher, panel, backdrop, and
-        message animations/transitions.
+      text: Haptics are feature-detected and skipped under prefers-reduced-motion,
+        whose CSS rule disables launcher, backdrop, panel and message
+        animations/transitions.
       truncated: false
   - id: A20
     source: specs/cloudflared-download-hardening/spec.md
     text: 优先使用 PATH 与既有有效缓存；缓存缺失时，同一 home 的并发调用复用一次下载事务。
-    result: passed
+    result: failed
     reason:
-      text: ensureCloudflared verifies and prioritizes an executable PATH candidate,
-        then verified cache candidates, and same-home calls share the downloads
-        map transaction; targeted tests cover priority, invalid PATH entries,
-        cache reuse, and singleflight.
+      text: Fall through to verified cache candidates when an executable PATH entry
+        fails cloudflared --version; ensureCloudflaredOnce currently throws
+        immediately from verifyDownloadedExecutable(fromPath), preventing use of
+        an existing valid cache.
       truncated: false
   - id: A21
     source: specs/cloudflared-download-hardening/spec.md
     text: 每次下载有总超时并传播调用方取消；响应体流式写入唯一临时文件，不把完整二进制缓冲在内存。
     result: failed
     reason:
-      text: "Propagate cancellation for concurrent callers individually: once a
-        same-home transaction exists, withCloudflaredDownload ignores the new
-        call's AbortSignal even though the first transaction's fetch is streamed
-        and timeout-bound."
+      text: Make cancellation waiter-specific without allowing the first caller's
+        signal to terminate the transaction for later active callers; the new
+        race lets a later caller cancel its wait, but the shared operation still
+        uses only the first caller's signal.
       truncated: false
   - id: A22
     source: specs/cloudflared-download-hardening/spec.md
@@ -262,83 +265,78 @@ acceptance:
       镜像；不内置第三方代理，错误不回显完整 URL 或 query。
     result: passed
     reason:
-      text: Download URLs always begin with the official Cloudflare HTTPS release and
-        append only explicitly configured HTTPS mirrors; errors use source
-        labels and generic validation messages without URL/query disclosure.
+      text: Sources are ordered official Cloudflare first followed only by explicitly
+        configured HTTPS mirrors, and failure messages use generic source labels
+        without exposing hostnames, query strings or complete URLs.
       truncated: false
   - id: A23
     source: specs/cloudflared-download-hardening/spec.md
     text: 每个来源失败后清理半截文件；小于 1 MiB 的下载视为无效。
     result: passed
     reason:
-      text: Each source uses an isolated attempt directory removed in finally, stream
-        failures remove the partial file, and payloads smaller than 1 MiB are
-        rejected and cleaned; targeted stream tests pass.
+      text: Each source has an isolated attempt directory removed in finally, stream
+        errors remove partial files, and payloads below 1 MiB are rejected.
       truncated: false
   - id: A24
     source: specs/cloudflared-download-hardening/spec.md
     text: tgz 只解压到隔离临时目录；候选文件须通过类型、权限和 `cloudflared --version` 验证。
     result: passed
     reason:
-      text: tgz files are listed for unsafe paths and extracted only into a
-        transaction directory; the selected candidate must be a regular file,
-        receives executable permissions, and passes cloudflared --version before
-        installation.
+      text: tgz processing occurs in an isolated transaction directory after unsafe
+        pathname checks; the located candidate must be a regular file, is made
+        executable and must pass cloudflared --version.
       truncated: false
   - id: A25
     source: specs/cloudflared-download-hardening/spec.md
     text: 仅在全部验证通过后原子替换正式缓存；失败不得删除或破坏此前有效缓存。
-    result: failed
+    result: passed
     reason:
-      text: Replace the verified candidate with a true atomic overwrite of the
-        canonical cache path; the current old-to-backup then
-        candidate-to-canonical sequence has an interruption window where the
-        valid cache is absent.
+      text: The repair no longer moves the canonical executable aside first; a fully
+        verified candidate is renamed directly over the same-filesystem cache
+        path, while failed attempts leave an existing valid cache untouched.
       truncated: false
   - id: A26
     source: specs/cloudflared-download-hardening/spec.md
     text: 不实现 Range 并发下载、动态 Homebrew bottle 发现、自动更新或独立公网 PIN。
     result: passed
     reason:
-      text: The implementation contains no Range downloader, dynamic Homebrew bottle
-        discovery, automatic updater, independent public PIN, or built-in
-        third-party proxy; the forbidden-capability scan passed.
+      text: No Range downloader, dynamic Homebrew discovery, automatic updater, public
+        PIN or built-in third-party proxy was introduced; the
+        forbidden-capability scan passed.
       truncated: false
   - id: A27
     source: specs/dsh-rc7-compat/spec.md
     text: slot 注册提供新版要求的稳定 key，同时保持 rc.6 行为。
     result: passed
     reason:
-      text: Settings, account, overlay, chat, and token slot registrations provide
-        stable key values while retaining existing ids/orders, and the project
-        builds against the current rc.6 dependencies.
+      text: Settings, account, overlay, chat and token registrations now provide
+        stable keys while the rc.6 dependency build remains successful.
       truncated: false
   - id: A28
     source: specs/dsh-rc7-compat/spec.md
     text: settings/whitelist 补丁探测 rc.6 的 `WEB_SETTINGS_NAMESPACES` 和 rc.7 移除该常量两种结构。
     result: passed
     reason:
-      text: whitelistPatchApplicable explicitly distinguishes rc.6
-        WEB_SETTINGS_NAMESPACES content from rc.7 content without that constant,
-        with fixtures for both layouts.
+      text: whitelistPatchApplicable distinguishes rc.6 content containing
+        WEB_SETTINGS_NAMESPACES from rc.7 content where it is absent, with
+        fixtures for both.
       truncated: false
   - id: A29
     source: specs/dsh-rc7-compat/spec.md
     text: rc.7 缺少旧 namespace 白名单时，状态视为已满足而不是 missing。
     result: passed
     reason:
-      text: patchStatus sets whitelist=true when WEB_SETTINGS_NAMESPACES is absent,
-        and applyRemotePatch leaves that rc.7 state unchanged after applying the
-        host-mode patch.
+      text: patchStatus reports whitelist satisfied when WEB_SETTINGS_NAMESPACES is
+        absent, and rc.7 patch application remains idempotent.
       truncated: false
   - id: A30
     source: specs/dsh-rc7-compat/spec.md
     text: workspace 搜索粘滞态和自动填充补丁为可选补丁；目标文件不存在时不阻塞核心 host/settings 补丁。
     result: passed
     reason:
-      text: Workspace search/autofill changes run only when the optional target
-        exists; missing targets report workspaceSearch satisfied and core
-        settings/whitelist patching still succeeds.
+      text: Workspace search/autofill patching is conditional on the optional target;
+        absence reports workspaceSearch satisfied and does not block host-mode
+        or whitelist work.
       truncated: false
   - id: A31
     source: specs/security-hardening/spec.md
@@ -346,30 +344,31 @@ acceptance:
       分割，名称精确匹配并保留值内其余 `=`；Unicode 空白不得参与认证。
     result: passed
     reason:
-      text: Both Gateway and Plugin call the same readCookie implementation, which
-        precisely enforces ASCII OWS, first-equals splitting, exact names,
-        retained value equals, and Unicode-whitespace rejection.
+      text: Gateway and Plugin import the same readCookie implementation, which
+        enforces exact names, ASCII OWS only, first-equals splitting and
+        Unicode-whitespace rejection.
       truncated: false
   - id: A32
     source: specs/security-hardening/spec.md
     text: 登录门和代理分派前规范化并校验路径；编码、双编码、压平和未知 `/gateway` 变形路由必须 fail-closed，合法 Gateway
       API 与 3080 本机入口不变。
-    result: passed
+    result: failed
     reason:
-      text: The pre-handler route classifier and WebSocket upgrade guard fail closed
-        for malformed/encoded/unknown reserved paths while canonical owned
-        routes and non-gateway upstream paths remain available.
+      text: "Reject reserved paths before parsing absolute-form URLs with new URL():
+        dot-segment normalization currently erases the /gateway prefix and
+        allows absolute-form /gateway/../... or /gateway/%2e%2e/... targets to
+        be classified and proxied upstream."
       truncated: false
   - id: A33
     source: specs/security-hardening/spec.md
     text: session history 与聊天写入在模型输入边界清洗隐藏 Unicode 和危险 HTML/CSS，保留正常文本、换行、比较符；文件
       `read/raw/download` 不改写。
-    result: passed
+    result: failed
     reason:
-      text: sanitizeText handles chat HTML/CSS/hidden-Unicode content and
-        sanitizeJsonStrings handles session history, while file
-        read/raw/download routes remain outside the rewrite branch; sanitization
-        tests preserve visible comparisons and line breaks.
+      text: "Protect file fidelity explicitly in the response dispatcher: session
+        history and chat are sanitized correctly, but the path-agnostic HTML
+        injection branch can still rewrite HTML bytes returned by file
+        raw/download endpoints."
       truncated: false
   - id: A34
     source: specs/security-hardening/spec.md
@@ -377,9 +376,9 @@ acceptance:
       IPv6；拒绝回环、私网、链路本地、未指定地址。hostname 解析失败或任一结果不安全时拒绝。
     result: passed
     reason:
-      text: The SSRF policy covers required IPv4/IPv6 socket forms and private ranges,
-        rejects any unsafe DNS result or lookup failure, and permits tested
-        public IPv4, IPv6, and all-public hostname answers.
+      text: The SSRF policy handles required socket-form IPv4/IPv6 inputs, rejects
+        unsafe or failed DNS resolution, and permits tested public literals and
+        all-public hostnames.
       truncated: false
   - id: A35
     source: specs/security-hardening/spec.md
@@ -387,10 +386,9 @@ acceptance:
       组合。
     result: passed
     reason:
-      text: All successfully rewritten response branches remove stale Content-Length
-        and Content-Encoding, and compression removes Transfer-Encoding before
-        emitting an explicit length; dedicated header tests and full regressions
-        pass.
+      text: Successful filtered, sanitized and recompressed response paths remove
+        stale Transfer-Encoding, Content-Length and Content-Encoding
+        combinations before emitting their replacement bodies.
       truncated: false
   - id: A36
     source: specs/security-hardening/spec.md
@@ -398,169 +396,129 @@ acceptance:
       `harden-multi-user-gateway`，仅补回归场景，不增加平行状态或授权路径。
     result: passed
     reason:
-      text: No new ownership schema or authorization authority appears in the diff;
-        existing multi-user request-policy, workspace/session filtering,
-        sandbox, and active-connection revocation remain authoritative and
-        passed Runtime checks.
+      text: No new ownership schema or decision path appears; existing request policy,
+        workspace/session isolation, sandbox downgrade and revocation mechanisms
+        remain authoritative.
       truncated: false
   - id: A37
     source: specs/workspace-session-experience/spec.md
     text: workspace 搜索无匹配后点击外部可以收起并清空搜索状态。
     result: passed
     reason:
-      text: The workspace patch changes outside-click behavior so a completed nonempty
-        search with zero remote items clears query and collapses the search
-        rather than remaining sticky.
+      text: The workspace patch changes outside-click handling so a completed nonempty
+        search with no remote results clears its query and collapses.
       truncated: false
   - id: A38
     source: specs/workspace-session-experience/spec.md
     text: 会话搜索输入关闭浏览器账号和密码自动填充。
     result: passed
     reason:
-      text: The optional workspace patch adds autocomplete=off and the dedicated name
-        dsh-access-session-search to the session search input.
+      text: "The session search input patch adds autoComplete: off and the dedicated
+        name dsh-access-session-search."
       truncated: false
   - id: A39
     source: specs/workspace-session-experience/spec.md
     text: 聊天消息轮询在建立基线后使用 `since` 增量，同一时刻至多一个请求。
-    result: passed
+    result: failed
     reason:
-      text: After baseline initialization pollUrl emits ?since=<lastSeenId>, while the
-        component-level inFlight flag prevents interval and immediate-rebuild
-        requests from overlapping.
+      text: Use the full/latest endpoint while ChatPollState.initialized is false;
+        current pollUrl uses since=0 before any baseline exists, contrary to the
+        required baseline-then-incremental sequence and causing paged backlog
+        unread errors.
       truncated: false
   - id: A40
     source: specs/workspace-session-experience/spec.md
     text: 空数据库建立稳定基线；数据库重置或 ID 回退时只重新建立基线，不产生未读幻觉。
-    result: passed
+    result: failed
     reason:
-      text: Empty databases establish cursor zero without unread; latest-ID rollback
-        or database epoch change triggers a full baseline rebuild with unread
-        forced to zero, as covered by state-transition tests.
+      text: Replace confirmed message history when rebuilding after an epoch change or
+        ID rollback instead of mergeById-merging the full baseline into the
+        prior epoch; otherwise old high-ID messages survive permanently even
+        though unread is reset.
       truncated: false
   - id: A41
     source: specs/workspace-session-experience/spec.md
     text: 组件卸载后不得由迟到的轮询响应更新状态。
     result: passed
     reason:
-      text: The polling effect sets disposed during cleanup, clears its interval,
-        checks disposed before every response-driven state update, and load
-        itself refuses work after disposal.
+      text: Polling cleanup marks the effect disposed, clears its interval, guards
+        load entry and response-driven state updates, and prevents scheduled
+        rebuild loads after unmount.
       truncated: false
 builder_handoff:
-  candidate_id: a0619832-9390-4579-9541-63a847d5e85d
+  candidate_id: 49df9bb5-cbcf-4b13-887c-2bde4e858003
   identity_provider: skill-coordinated
-  builder_execution_ref: skill-coordinated:builder:0bbcd04d-123f-442d-90c4-e675291330b2
-  iteration: 2
+  builder_execution_ref: skill-coordinated:builder:97ef6d9a-ad13-40d9-8c61-e0fb0f692c07
+  iteration: 3
   summary:
-    text: "Implemented the confirmed incremental hardening scope on top of the
-      existing multi-user gateway authority: shared strict cookie parsing;
-      method-aware fail-closed gateway routing; model-input-only
-      Unicode/HTML/CSS sanitation; SSRF address validation and DNS pinning;
-      rewritten response header cleanup; rc.6/rc.7-compatible optional patches
-      and rollback; account-scoped incremental chat
-      polling/preferences/drag/optimistic UI/reduced-motion haptics; and
-      transactional cloudflared acquisition with shared cancellation deadline,
-      official-plus-explicit-HTTPS-mirror fallback, streaming, archive traversal
-      rejection, executable/version validation, and safe cache replacement.
-      Closed review gaps for visible-scope SQL cursors, shared DB epoch,
-      response framing, PATH/cache validation, archive extraction, and
-      non-executable PATH shadowing."
+    text: "Closed all four semantic defects from iteration 2 verification: chat
+      preference changes now propagate immediately between Access Management and
+      the mounted launcher with rollback on failed persistence; capped message
+      merging reserves space for optimistic bubbles; each same-home cloudflared
+      singleflight caller can independently cancel its wait without cancelling
+      the shared transaction; and verified cache installation atomically renames
+      the candidate over the canonical path without first moving the valid cache
+      away. Added focused regressions for each behavior."
     truncated: false
   addressed_acceptance_ids:
-    - A1
-    - A2
-    - A3
-    - A4
-    - A5
-    - A6
-    - A7
-    - A8
-    - A9
     - A10
     - A11
     - A12
     - A13
-    - A14
     - A15
-    - A16
     - A17
-    - A18
-    - A19
-    - A20
     - A21
-    - A22
-    - A23
-    - A24
     - A25
-    - A26
-    - A27
-    - A28
-    - A29
-    - A30
-    - A31
-    - A32
-    - A33
-    - A34
-    - A35
-    - A36
-    - A37
-    - A38
-    - A39
-    - A40
-    - A41
   checks:
+    - name:
+        text: targeted chat and tunnel regressions
+        truncated: false
+      result: passed
+      note:
+        text: 21/21 passed
+        truncated: false
     - name:
         text: npm test
         truncated: false
       result: passed
       note:
-        text: 166/166 tests passed on candidate HEAD 2d9632b
+        text: 169/169 passed on candidate HEAD 054dbba
         truncated: false
     - name:
         text: npm run build
         truncated: false
       result: passed
       note:
-        text: TypeScript and client bundle build succeeded on candidate HEAD
+        text: TypeScript and client build succeeded
         truncated: false
     - name:
-        text: git diff --check main...HEAD
+        text: git diff --check
         truncated: false
       result: passed
       note:
         text: No whitespace errors
         truncated: false
     - name:
-        text: forbidden-scope static scan
+        text: forbidden capability boundary scan
         truncated: false
       result: passed
       note:
-        text: No parallel session_owner, built-in third-party proxy, Range download,
-          dynamic Homebrew, or public PIN implementation found
-        truncated: false
-    - name:
-        text: npm pack --dry-run --json
-        truncated: false
-      result: passed
-      note:
-        text: 66 package files; THIRD_PARTY_NOTICES.md included
+        text: No out-of-scope ownership, proxy, Range, Homebrew, or PIN markers
         truncated: false
   checks_truncated: false
   known_limits:
-    - text: GitHub connectivity timed out during source refresh attempts, so
-        dsh-passwords@7704b59/v2.5.1 and dsh-pocket@a0b953f are the latest
-        locally known baselines, not remotely reconfirmed latest commits.
+    - text: GitHub remains unreachable, so source baselines are latest locally known
+        rather than remotely reconfirmed.
       truncated: false
   known_limits_truncated: false
-  submitted_at: 2026-08-21T07:07:49.014Z
+  submitted_at: 2026-08-21T07:44:43.617Z
 blockers: []
 verification:
-  candidate_id: a0619832-9390-4579-9541-63a847d5e85d
+  candidate_id: 49df9bb5-cbcf-4b13-887c-2bde4e858003
   identity_provider: skill-coordinated
-  verifier_execution_ref: skill-coordinated:verifier:1fc0f996-6551-4e89-9227-9d5f7260a832
-  iteration: 2
-  attempt: 2
+  verifier_execution_ref: skill-coordinated:verifier:fe434739-3ce9-4caf-9c3e-8fdf5d273eef
+  iteration: 3
+  attempt: 1
   assurance: skill-coordinated
   verdict: fail
   checks:
@@ -575,7 +533,7 @@ verification:
       cwd_ref: .
       status: passed
       exit_code: 0
-      duration_ms: 9363
+      duration_ms: 8376
     - id: production-build
       name:
         text: Production TypeScript and client build
@@ -589,7 +547,7 @@ verification:
       cwd_ref: .
       status: passed
       exit_code: 0
-      duration_ms: 2852
+      duration_ms: 3256
     - id: diff-check
       name:
         text: Git diff whitespace validation
@@ -605,7 +563,7 @@ verification:
       cwd_ref: .
       status: passed
       exit_code: 0
-      duration_ms: 42
+      duration_ms: 50
     - id: scope-boundaries
       name:
         text: Forbidden capability boundary scan
@@ -622,24 +580,7 @@ verification:
       cwd_ref: .
       status: passed
       exit_code: 0
-      duration_ms: 58
-    - id: package-notice
-      name:
-        text: Published package retains third-party notice
-        truncated: false
-      argv_display:
-        - text: -lc
-          truncated: false
-        - text: set -o pipefail; npm pack --dry-run --json | node -e \"let
-            s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const
-            p=JSON.parse(s)[0];if(!p.files.some(f=>f.path==='THIRD_PARTY_NOTICES.md'))process.exit(1);console.log('notice
-            included; files='+p.files.length)})\"
-          truncated: false
-      argv_truncated: false
-      cwd_ref: .
-      status: failed
-      exit_code: 2
-      duration_ms: 13
+      duration_ms: 68
     - id: package-notice-v2
       name:
         text: Published package retains third-party notice
@@ -655,19 +596,21 @@ verification:
       cwd_ref: .
       status: passed
       exit_code: 0
-      duration_ms: 934
+      duration_ms: 1018
   summary:
-    text: "Runtime quality gates all pass, including 166 tests, build, diff,
-      boundary scan, and corrected package notice. Semantic verification
-      nevertheless found four actionable defects represented by eight acceptance
-      failures: chat visibility preference is not synchronized with the mounted
-      launcher, optimistic messages disappear at the 200-message cap, later
-      singleflight callers cannot cancel, and cloudflared cache replacement is
-      not truly atomic."
+    text: "The four previously reported repair areas improved substantially: mounted
+      chat preference synchronization, capped optimistic rendering and direct
+      atomic rename are fixed, and later callers can cancel their own
+      singleflight wait. The candidate still fails semantic acceptance because
+      absolute-form gateway dot-segment targets can fall through upstream, HTML
+      file responses are not byte-preserving, initial chat polling is not
+      baseline-first and rebuilds retain stale epoch messages, shared download
+      cancellation remains coupled to the first caller, and an invalid
+      executable PATH candidate prevents fallback to a valid cache."
     truncated: false
   risks: []
   risks_truncated: false
-  completed_at: 2026-08-21T07:40:04.506Z
+  completed_at: 2026-08-21T08:07:05.253Z
 history:
   - goal_cycle: 1
     iteration: 1
@@ -724,6 +667,34 @@ history:
         replacement is not truly atomic."
       truncated: false
     completed_at: 2026-08-21T07:40:04.506Z
+  - goal_cycle: 2
+    iteration: 3
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A3
+      - A9
+      - A12
+      - A18
+      - A20
+      - A21
+      - A32
+      - A33
+      - A39
+      - A40
+    summary:
+      text: "The four previously reported repair areas improved substantially: mounted
+        chat preference synchronization, capped optimistic rendering and direct
+        atomic rename are fixed, and later callers can cancel their own
+        singleflight wait. The candidate still fails semantic acceptance because
+        absolute-form gateway dot-segment targets can fall through upstream,
+        HTML file responses are not byte-preserving, initial chat polling is not
+        baseline-first and rebuilds retain stale epoch messages, shared download
+        cancellation remains coupled to the first caller, and an invalid
+        executable PATH candidate prevents fallback to a valid cache."
+      truncated: false
+    completed_at: 2026-08-21T08:07:05.253Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null

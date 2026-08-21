@@ -145,18 +145,23 @@ export function ChatLauncher(props: PropsLocale<'dshaccess'>) {
             const nextMe = (d.me ?? null) as Me | null;
             setMe(nextMe);
             const latestId = Number.isSafeInteger(d.latestId) && d.latestId >= 0 ? d.latestId : 0;
+            let replaceMessages = false;
             if (nextMe) {
               const epoch = typeof d.epoch === 'string' ? d.epoch : '';
               const transition = nextChatPollState(pollStateRef.current, incoming, latestId, epoch, nextMe.id, openRef.current);
               pollStateRef.current = transition.state;
               lastSeenId.current = transition.state.lastSeenId;
+              replaceMessages = transition.replaceMessages;
               if (transition.unread > 0) setUnread((count) => count + transition.unread);
               if (transition.state.rebuilding) {
                 window.setTimeout(load, 0);
                 return;
               }
             }
-            setMessages((prev) => mergeById(prev, incoming));
+            setMessages((prev) => mergeById(
+              replaceMessages ? prev.filter((message) => message.optimistic) : prev,
+              incoming,
+            ));
             setError('');
           } else if (!res.ok) {
             setError(d.error ?? t('chat.loadFailed'));

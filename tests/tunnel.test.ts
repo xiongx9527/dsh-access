@@ -85,6 +85,26 @@ test('ensureCloudflared prefers an explicit PATH binary over a stale cache', asy
   }
 });
 
+test('an executable PATH entry that fails validation does not shadow a valid cache', async (t) => {
+  if (process.platform === 'win32') return t.skip('POSIX shell fixture is not applicable');
+  const root = mkdtempSync(join(tmpdir(), 'dshpw-cloudflared-path-broken-'));
+  const cacheDir = join(root, 'remote-access', 'bin');
+  const pathDir = join(root, 'path');
+  mkdirSync(cacheDir, { recursive: true });
+  mkdirSync(pathDir, { recursive: true });
+  const asset = releaseAsset().name.replace(/\.tgz$/i, '');
+  writeFileSync(join(cacheDir, asset), FAKE_CLOUDFLARED, { mode: 0o700 });
+  writeFileSync(join(pathDir, 'cloudflared'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
+  const previous = process.env.PATH;
+  process.env.PATH = pathDir;
+  try {
+    const resolved = await ensureCloudflared(root);
+    assert.equal(readFileSync(resolved, 'utf8'), FAKE_CLOUDFLARED);
+  } finally {
+    process.env.PATH = previous;
+  }
+});
+
 test('non-executable PATH entries do not shadow a valid executable cache', async (t) => {
   if (process.platform === 'win32') return t.skip('POSIX executable permissions are not applicable');
   const root = mkdtempSync(join(tmpdir(), 'dshpw-cloudflared-path-invalid-'));
@@ -142,6 +162,25 @@ test('a later singleflight caller can cancel its own wait', async () => {
   release();
   assert.equal(await first, '/tmp/cloudflared');
   assert.equal(calls, 1);
+});
+
+test('aborting the first singleflight caller does not cancel a later active waiter', async () => {
+  let release!: () => void;
+  let sharedAborted = false;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const operation = async (signal: AbortSignal) => {
+    signal.addEventListener('abort', () => { sharedAborted = true; }, { once: true });
+    await gate;
+    return '/tmp/cloudflared';
+  };
+  const firstController = new AbortController();
+  const first = withCloudflaredDownload('/tmp/first-cancellable-home', operation, firstController.signal);
+  const second = withCloudflaredDownload('/tmp/first-cancellable-home', operation);
+  firstController.abort(new Error('first caller cancelled'));
+  await assert.rejects(first, /first caller cancelled/);
+  assert.equal(sharedAborted, false);
+  release();
+  assert.equal(await second, '/tmp/cloudflared');
 });
 
 test('verified cache replacement does not move the canonical executable away first', () => {

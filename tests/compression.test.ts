@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { compressResponseBody, headersForRewrittenBody, requestedCompression, shouldBufferForCompression } from '../src/gateway.js';
+import { compressResponseBody, headersForRewrittenBody, requestedCompression, shouldBufferForCompression, shouldRewriteHtmlResponse } from '../src/gateway.js';
 
 const body = Buffer.from(JSON.stringify({ values: Array.from({ length: 700 }, (_, index) => ({ index, value: 'repeatable remote response payload' })) }), 'utf8');
 
@@ -41,6 +41,12 @@ test('rewritten bodies never retain transfer-encoding beside content-length', ()
   );
   assert.equal(result.headers['content-length'], '2');
   assert.equal(result.headers['transfer-encoding'], undefined);
+});
+
+test('raw and download file responses remain byte faithful even when they contain HTML', () => {
+  assert.equal(shouldRewriteHtmlResponse('GET', '/aionui-panel/raw', 'text/html'), false);
+  assert.equal(shouldRewriteHtmlResponse('GET', '/api/dsh-uploads/download', 'text/html'), false);
+  assert.equal(shouldRewriteHtmlResponse('GET', '/', 'text/html'), true);
 });
 
 test('rewritten response headers remove all stale body framing and encoding', () => {

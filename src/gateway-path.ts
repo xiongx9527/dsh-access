@@ -18,9 +18,11 @@ const GATEWAY_ROUTES: readonly Route[] = [
 
 function rawPathOf(requestTarget: string): string {
   if (/^https?:\/\//i.test(requestTarget)) {
-    try { return new URL(requestTarget).pathname; } catch { return requestTarget; }
+    const authorityEnd = requestTarget.indexOf('/', requestTarget.indexOf('//') + 2);
+    if (authorityEnd < 0) return '/';
+    return requestTarget.slice(authorityEnd).split(/[?#]/, 1)[0] || '/';
   }
-  return requestTarget.split('?')[0] || '/';
+  return requestTarget.split(/[?#]/, 1)[0] || '/';
 }
 
 function decodePath(rawPath: string): { decoded: string; malformed: boolean } {

@@ -113,7 +113,14 @@ async function extractTarGz(archive: string, destination: string): Promise<void>
 }
 
 const MIN_CLOUDFLARED_BYTES = 1024 * 1024;
-const downloads = new Map<string, Promise<string>>();
+interface SharedDownload {
+  promise: Promise<string>;
+  controller: AbortController;
+  waiters: number;
+  settled: boolean;
+}
+
+const downloads = new Map<string, SharedDownload>();
 
 export async function streamDownloadToFile(response: Response, destination: string): Promise<number> {
   if (!response.ok || response.body === null) throw new Error(`cloudflared download HTTP ${String(response.status)}`);
@@ -128,26 +135,44 @@ export async function streamDownloadToFile(response: Response, destination: stri
   }
 }
 
-function waitWithCallerCancellation(pending: Promise<string>, signal?: AbortSignal): Promise<string> {
-  if (!signal) return pending;
-  if (signal.aborted) return Promise.reject(signal.reason);
+function waitWithCallerCancellation(shared: SharedDownload, signal?: AbortSignal): Promise<string> {
+  if (signal?.aborted) return Promise.reject(signal.reason);
+  shared.waiters += 1;
   return new Promise<string>((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    const cleanup = () => signal.removeEventListener('abort', onAbort);
-    signal.addEventListener('abort', onAbort, { once: true });
-    pending.then(
-      (value) => { cleanup(); resolve(value); },
-      (error) => { cleanup(); reject(error); },
+    let waiting = true;
+    const finish = (callback: () => void) => {
+      if (!waiting) return;
+      waiting = false;
+      signal?.removeEventListener('abort', onAbort);
+      shared.waiters -= 1;
+      callback();
+      if (!shared.settled && shared.waiters === 0) shared.controller.abort(new Error('cloudflared download cancelled'));
+    };
+    const onAbort = () => finish(() => reject(signal?.reason));
+    signal?.addEventListener('abort', onAbort, { once: true });
+    shared.promise.then(
+      (value) => finish(() => resolve(value)),
+      (error) => finish(() => reject(error)),
     );
   });
 }
 
-export function withCloudflaredDownload(home: string, operation: () => Promise<string>, signal?: AbortSignal): Promise<string> {
-  const current = downloads.get(home);
-  if (current) return waitWithCallerCancellation(current, signal);
-  const pending = operation().finally(() => { downloads.delete(home); });
-  downloads.set(home, pending);
-  return waitWithCallerCancellation(pending, signal);
+export function withCloudflaredDownload(
+  home: string,
+  operation: (signal: AbortSignal) => Promise<string>,
+  signal?: AbortSignal,
+): Promise<string> {
+  let shared = downloads.get(home);
+  if (!shared) {
+    const controller = new AbortController();
+    shared = { promise: Promise.resolve(''), controller, waiters: 0, settled: false };
+    shared.promise = operation(controller.signal).finally(() => {
+      shared!.settled = true;
+      downloads.delete(home);
+    });
+    downloads.set(home, shared);
+  }
+  return waitWithCallerCancellation(shared, signal);
 }
 
 async function verifyDownloadedExecutable(file: string): Promise<void> {
@@ -198,14 +223,16 @@ async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promis
   // stale cached binary from an older dsh-access run.
   const fromPath = executableOnPath();
   if (fromPath) {
-    await verifyDownloadedExecutable(fromPath);
     const staged = join(directory, `.cloudflared-path-${process.pid}-${Date.now()}`);
     try {
+      await verifyDownloadedExecutable(fromPath);
       copyFileSync(fromPath, staged);
       if (process.platform !== 'win32') chmodSync(staged, 0o700);
       await verifyDownloadedExecutable(staged);
       replaceExecutable(staged, executable);
       return executable;
+    } catch {
+      // A broken PATH entry must not shadow an existing verified cache.
     } finally {
       rmSync(staged, { force: true });
     }
@@ -272,7 +299,7 @@ async function ensureCloudflaredOnce(home: string, signal?: AbortSignal): Promis
 }
 
 export function ensureCloudflared(home: string, signal?: AbortSignal): Promise<string> {
-  return withCloudflaredDownload(home, () => ensureCloudflaredOnce(home, signal), signal);
+  return withCloudflaredDownload(home, (sharedSignal) => ensureCloudflaredOnce(home, sharedSignal), signal);
 }
 
 export interface CloudflaredTunnelOptions {
