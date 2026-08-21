@@ -33,6 +33,16 @@ test('compression skips SSE, existing encodings and small responses', () => {
   assert.deepEqual(result.body, small);
 });
 
+test('rewritten bodies never retain transfer-encoding beside content-length', () => {
+  const result = compressResponseBody(
+    request('gzip'),
+    { 'content-type': 'application/json', 'transfer-encoding': 'chunked', 'content-length': '999' },
+    Buffer.from('{}'),
+  );
+  assert.equal(result.headers['content-length'], '2');
+  assert.equal(result.headers['transfer-encoding'], undefined);
+});
+
 test('compression honors q=0 exclusions', () => {
   assert.equal(requestedCompression(request('br;q=0, gzip;q=0.8')), 'gzip');
   assert.equal(requestedCompression(request('br;q=0, gzip;q=0')), null);

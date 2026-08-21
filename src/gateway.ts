@@ -519,6 +519,8 @@ export function compressResponseBody(
   body: Buffer,
 ): { headers: Record<string, string | string[] | undefined>; body: Buffer } {
   const outputHeaders = { ...headers };
+  // Every return path below emits a complete body with an explicit length.
+  delete outputHeaders['transfer-encoding'];
   const contentType = String(outputHeaders['content-type'] ?? '');
   const existingEncoding = String(outputHeaders['content-encoding'] ?? '');
   const encoding = requestedCompression(req);
