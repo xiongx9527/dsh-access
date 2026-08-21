@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 35
+state_version: 39
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,11 +29,11 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 9
+  iteration: 10
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 7
-  no_progress_count: 1
+  failed_iteration_count: 8
+  no_progress_count: 2
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
@@ -473,6 +473,32 @@ history:
         variants.
       truncated: false
     completed_at: 2026-08-21T09:30:42.104Z
+  - goal_cycle: 2
+    iteration: 9
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A32
+    summary:
+      text: "Fail: all runtime gates and all non-path acceptance criteria pass,
+        including 177 tests and the build, but A2 and A32 remain unresolved.
+        Aggressive request-target testing found additional flattened and
+        unsupported-scheme gateway variants that classify as upstream, plus
+        valid percent-encoded benign suffixes that are falsely rejected."
+      truncated: false
+    completed_at: 2026-08-21T09:40:59.074Z
+  - goal_cycle: 2
+    iteration: 9
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: User authorized automatic multi-agent continuation; revise implementation
+        for newly enumerated dot-segment, encoded slash, malformed scheme and
+        benign adjacent-name variants.
+      truncated: false
+    completed_at: 2026-08-21T09:41:10.907Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null

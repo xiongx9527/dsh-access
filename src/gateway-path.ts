@@ -39,6 +39,23 @@ function decodeAsciiEscapes(rawPath: string): string {
   return decoded;
 }
 
+function claimsGatewayNamespace(pathname: string): boolean {
+  const stack: string[] = [];
+  for (const segment of pathname.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      stack.pop();
+      continue;
+    }
+    if (stack.length === 0 && (
+      segment.toLowerCase() === 'gateway' ||
+      /^gateway%(?![0-9a-f]{2})/i.test(segment)
+    )) return true;
+    stack.push(segment);
+  }
+  return false;
+}
+
 /** Keep the reserved /gateway namespace out of the upstream SPA fallback. */
 export function classifyGatewayRequestTarget(method: string, requestTarget: string): GatewayPathClass {
   // Only origin-form and well-formed HTTP absolute-form targets are supported. WHATWG treats
@@ -47,13 +64,13 @@ export function classifyGatewayRequestTarget(method: string, requestTarget: stri
     requestTarget.includes('\\') ||
     requestTarget.startsWith('//') ||
     /^https?:\/{3,}/i.test(requestTarget) ||
-    (/^[a-z][a-z0-9+.-]*:\/\//i.test(requestTarget) && !/^https?:\/\//i.test(requestTarget))
+    (/^[a-z][a-z0-9+.-]*:/i.test(requestTarget) && !/^https?:\/\//i.test(requestTarget))
   ) return 'reject';
   const rawPath = rawPathOf(requestTarget);
   const decoded = decodeAsciiEscapes(rawPath);
   if (decoded.includes('\\')) return 'reject';
-  const rawClaimsGateway = /^\/gateway(?:\/|$|%)/i.test(rawPath);
-  const decodedClaimsGateway = /^\/gateway(?:\/|$|%)/i.test(decoded);
+  const rawClaimsGateway = claimsGatewayNamespace(rawPath);
+  const decodedClaimsGateway = claimsGatewayNamespace(decoded);
   let normalized: string;
   try {
     normalized = new URL(decoded.replace(/\/+/g, '/'), 'http://localhost').pathname;
