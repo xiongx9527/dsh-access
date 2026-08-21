@@ -39,7 +39,7 @@ function decodeAsciiEscapes(rawPath: string): string {
   return decoded;
 }
 
-function claimsGatewayNamespace(pathname: string): boolean {
+function claimsGatewayNamespace(pathname: string, rejectMalformedSuffix = false): boolean {
   const stack: string[] = [];
   for (const segment of pathname.split('/')) {
     if (!segment || segment === '.') continue;
@@ -47,10 +47,10 @@ function claimsGatewayNamespace(pathname: string): boolean {
       stack.pop();
       continue;
     }
+    const withoutControls = segment.replace(/[\u0000-\u001f\u007f]/g, '');
     if (stack.length === 0 && (
-      segment.toLowerCase() === 'gateway' ||
-      /^gateway[\u0000-\u001f\u007f]/i.test(segment) ||
-      /^gateway%(?![0-9a-f]{2})/i.test(segment)
+      withoutControls.toLowerCase() === 'gateway' ||
+      (rejectMalformedSuffix && /^gateway%(?![0-9a-f]{2})/i.test(segment))
     )) return true;
     stack.push(segment);
   }
@@ -70,14 +70,15 @@ export function classifyGatewayRequestTarget(method: string, requestTarget: stri
   const rawPath = rawPathOf(requestTarget);
   const decoded = decodeAsciiEscapes(rawPath);
   if (decoded.includes('\\')) return 'reject';
-  const rawClaimsGateway = claimsGatewayNamespace(rawPath);
+  const rawClaimsGateway = claimsGatewayNamespace(rawPath, true);
   const decodedClaimsGateway = claimsGatewayNamespace(decoded);
-  let normalized: string;
-  try {
-    normalized = new URL(decoded.replace(/\/+/g, '/'), 'http://localhost').pathname;
-  } catch {
-    return rawClaimsGateway || decodedClaimsGateway ? 'reject' : 'upstream';
+  const normalizedSegments: string[] = [];
+  for (const segment of decoded.replace(/\/+/g, '/').split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') normalizedSegments.pop();
+    else normalizedSegments.push(segment);
   }
+  const normalized = `/${normalizedSegments.join('/')}`;
   const normalizedLower = normalized.toLowerCase();
   const normalizedClaimsGateway = normalizedLower === '/gateway' || normalizedLower.startsWith('/gateway/');
   if (!rawClaimsGateway && !decodedClaimsGateway && !normalizedClaimsGateway) return 'upstream';

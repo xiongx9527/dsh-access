@@ -3,7 +3,7 @@ name: sync-dsh-passwords-hardening
 language: zh-CN
 phase: build
 status: active
-state_version: 43
+state_version: 47
 brief: brief.md
 spec_changes:
   - capability: chat-experience
@@ -29,11 +29,11 @@ workspace:
 loop:
   stage: repairing
   goal_cycle: 2
-  iteration: 11
+  iteration: 12
   attempt: 0
   retry_epoch: 0
-  failed_iteration_count: 9
-  no_progress_count: 3
+  failed_iteration_count: 10
+  no_progress_count: 4
   execution_failure_count: 0
   previous_unresolved_ids:
     - A2
@@ -521,6 +521,34 @@ history:
         final percent-encoded control-character adjacency variants.
       truncated: false
     completed_at: 2026-08-21T09:48:46.341Z
+  - goal_cycle: 2
+    iteration: 11
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A32
+    summary:
+      text: "Independent read-only verification of HEAD 8a10c64 found 39 passed and 2
+        failed criteria. Fresh npm test passed 177/177, build passed, diff check
+        passed, and package dry-run included THIRD_PARTY_NOTICES.md. A2/A32
+        remain unresolved: exhaustive ASCII-control insertion testing found
+        controls before or inside the reserved gateway token can still produce
+        upstream classification after dot normalization, while several valid
+        encoded benign adjacent names are falsely rejected."
+      truncated: false
+    completed_at: 2026-08-21T10:00:40.249Z
+  - goal_cycle: 2
+    iteration: 11
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: User authorized automatic continuation; revise implementation for
+        exhaustive ASCII-control insertion and benign encoded delimiter
+        handling.
+      truncated: false
+    completed_at: 2026-08-21T10:00:41.492Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null

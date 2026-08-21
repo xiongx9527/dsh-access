@@ -59,6 +59,19 @@ test('absolute-form query and fragment slashes do not become the request pathnam
   assert.equal(classifyGatewayRequestTarget('GET', '/api/%2525252525252525252525252525252566oo'), 'upstream');
   assert.equal(classifyGatewayRequestTarget('GET', '/gateway%2Dguide'), 'upstream');
   assert.equal(classifyGatewayRequestTarget('GET', '/gateway%20guide'), 'upstream');
+  assert.equal(classifyGatewayRequestTarget('GET', '/gateway%23guide'), 'upstream');
+  assert.equal(classifyGatewayRequestTarget('GET', '/gateway%3Fguide'), 'upstream');
+  assert.equal(classifyGatewayRequestTarget('GET', '/gateway%25guide'), 'upstream');
+});
+
+test('ASCII controls cannot obscure any part of the gateway namespace', () => {
+  for (const code of [...Array.from({ length: 32 }, (_, value) => value), 0x7f]) {
+    const escape = `%${code.toString(16).padStart(2, '0')}`;
+    for (let index = 0; index <= 'gateway'.length; index += 1) {
+      const obscured = `${'gateway'.slice(0, index)}${escape}${'gateway'.slice(index)}`;
+      assert.equal(classifyGatewayRequestTarget('GET', `/${obscured}/../api/session.list`), 'reject');
+    }
+  }
 });
 
 test('unknown canonical gateway routes cannot fall through to the upstream SPA', () => {
